@@ -1,0 +1,17 @@
+# Secrets
+.env
+
+# Database (it's big and changes daily, usually better to keep local)
+*.duckdb
+
+# Python/Environment
+venv/
+__pycache__/
+*.pyc
+
+# Prefect local metadata
+.prefect/
+
+#logs
+logs/
+*.log

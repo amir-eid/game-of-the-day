@@ -1,0 +1,11 @@
+services:
+  app:
+    build: .
+    container_name: sports_app
+    volumes:
+      - .:/app  # This links your Mac folder to the container
+    environment:
+      - DBT_PROFILES_DIR=/app
+    working_dir: /app/sports_transform
+    stdin_open: true 
+    tty: true

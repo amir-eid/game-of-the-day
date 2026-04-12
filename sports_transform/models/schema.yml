@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  - name: fct_daily_schedule
+    description: "The final ranked list of sports games for today."
+    columns:
+      - name: total_watch_score
+        description: "The calculated interest score based on favorites, records, and leagues."
+        data_tests:
+          - not_null  # dbt will alert you if a game is missing a score!
