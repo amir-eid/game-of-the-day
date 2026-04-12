@@ -10,6 +10,7 @@ This project is designed to solve the "What should I watch today?" problem for s
 * **Transformation:** [dbt](https://www.getdbt.com/) (SQL-based business logic & scoring)
 * **Database:** [DuckDB](https://duckdb.org/) (Fast, local analytical database)
 * **Notifications:** **Discord Webhooks** (Mobile alerts)
+* **Dashboard:** **Streamlit**
 * **Language:** Python 3.x
 
 ---
