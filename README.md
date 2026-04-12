@@ -1,95 +1,81 @@
-# Game of the Day (GOTD)
+# 🏆 Game of the Day: Sports Analytics Pipeline
 
-A personal project that automatically pulls today's games across multiple sports leagues and recommends the top 5 most watchable games based on a custom scoring algorithm.
+An automated data pipeline that scrapes daily sports schedules, ranks games based on a custom "watchability" algorithm, and sends the top picks directly to Discord.
 
----
+## 🚀 Overview
+This project is designed to solve the "What should I watch today?" problem for sports fans. It handles everything from raw data extraction to final mobile notifications.
 
-## Motivation
-
-As someone who follows multiple sports across different leagues and time zones, I wanted a simple tool that answers one question every day: **"What's the best game to watch tonight?"**
-
-Instead of manually checking schedules across the NBA, NFL, LaLiga, and others, this project does it automatically — fetching live data, applying personal preferences, and surfacing the top recommendations.
-
----
-
-## How It Works
-
-1. **Fetches** today's games from the ESPN API across 11 leagues
-2. **Scores** each game based on weighted criteria
-3. **Returns** a Top 5 list sorted by watchability
-
-### Leagues Covered
-NBA, NFL, MLB, NHL, LaLiga, Premier League, Bundesliga, Serie A, Ligue 1, College Basketball, College Football
-
-### Scoring Criteria
-| Factor | Points |
-|---|---|
-| Favorite team playing | 30 |
-| Playoff / Finals game | 25 |
-| League weight (NFL=20 down to Serie A=2) | 2–20 |
-| Winning streak | 15 |
-| Derby / Rivalry | 15 |
-| Table position (win %) | 0–10 |
-| Games after 02:00 CET | excluded |
-
-Favorite team games always appear at the top of the list regardless of score.
+### The Tech Stack
+* **Orchestration:** [Prefect](https://www.prefect.io/) (Scheduled runs & task monitoring)
+* **Transformation:** [dbt](https://www.getdbt.com/) (SQL-based business logic & scoring)
+* **Database:** [DuckDB](https://duckdb.org/) (Fast, local analytical database)
+* **Notifications:** **Discord Webhooks** (Mobile alerts)
+* **Language:** Python 3.x
 
 ---
 
-## Tech Stack
-
-- **Python** – data fetching and scoring logic
-- **Pandas** – data manipulation
-- **ESPN API** – live game data (free, no auth required)
+## 🛠️ Pipeline Architecture
+1.  **Scrape:** Extracts daily game data (Leagues, Matchups, Times, Odds).
+2.  **Load:** Ingests raw JSON/CSV data into a local `sports.duckdb` instance.
+3.  **Transform (dbt):**
+    * Cleans team names and timestamps.
+    * Calculates a `total_watch_score` based on team rankings, rivalries, and betting spreads.
+    * Filters for "Favorites" and "Derby" matches.
+4.  **Notify:** Queries the final dbt models and pushes the Top 10 games to a Discord channel.
 
 ---
 
-## Project Structure
+## ⚙️ Setup & Installation
 
+### 1. Environment Variables
+To keep sensitive data secure, this project uses a `.env` file. Create one in the root directory:
+```text
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 ```
-GOTD/
-├── GOTD_clean.ipynb   # Main notebook
-├── games_YYYYMMDD.csv # Daily game exports
-└── README.md
+
+### 2. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Initialize dbt
+Ensure your `profiles.yml` is configured to point to `sports.duckdb`, then verify the connection:
+```bash
+dbt debug
 ```
 
 ---
+
+## 🏃 Running the Pipeline
+
+### Manual Run
+To execute the entire flow immediately:
+```bash
+python run_pipeline.py
+```
+
+### Scheduled Serving (Prefect)
+To keep the pipeline "listening" for scheduled runs (e.g., every morning at 11:00 AM):
+```bash
+# This will serve the flow on your local machine
+python run_pipeline.py --serve
+```
+
+---
+
+## 📊 Database Schema
+* `raw_schedule`: The landing zone for scraped data.
+* `fct_daily_schedule`: The final analytical table produced by dbt.
+* `watched_history`: A persistent table tracking every game recommended over time to avoid duplicates and track performance.
+
+---
+
+## 🛡️ Security Note
+The `.env` file, `sports.duckdb`, and `logs/` are explicitly excluded from the repository via `.gitignore` to protect webhook credentials and prevent large binary files from bloating the version history.
 
 ## Roadmap
 
-- [ ] Add dbt for structured data transformations
-- [ ] Containerize with Docker
 - [ ] PowerBI dashboard to visualize daily recommendations
 - [ ] Compare recommendations vs. games actually watched
 - [ ] ML model to learn from watch history and improve recommendations over time
 - [ ] News feed for recommended teams
-- [ ] Mobile push notifications with daily Top 5
-
----
-
-## Example Output
-
-```
-🏆 TOP 5 SPIELE DES TAGES
-==================================================
-
-#1  ⭐ Favorit
-   Miami Heat @ Oklahoma City Thunder
-   Liga:    NBA
-   Zeit:    01:00 – 03:30
-   Records: 20-18 vs 32-7
-   Score:   56
-
-#2  🔥 Derby
-   Real Madrid @ Barcelona
-   Liga:    ESP.1
-   Zeit:    21:00 – 23:00
-   Records: 15-3-1 vs 14-4-1
-   Score:   44
-```
-
----
-
-## Notes
-
-This is a personal side project built to learn and apply data engineering concepts. The scoring algorithm reflects my own viewing preferences and is fully configurable.
