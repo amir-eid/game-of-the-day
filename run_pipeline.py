@@ -214,6 +214,15 @@ def update_history_and_display_task():
 
     return df
 
+@task
+def notify_dashboard_sync():
+    # Wir berühren einfach den Zeitstempel der DB-Datei.
+    # Da Streamlit os.path.getmtime prüft, erkennt es die Änderung sofort.
+    db_path = 'sports.duckdb'
+    if os.path.exists(db_path):
+        os.utime(db_path, None)
+        print("🔔 Dashboard notified: New dbt data detected.")
+
 @flow(name="Sports Data Pipeline", log_prints=True)
 def sports_flow():
     # Execute the tasks in order
@@ -221,6 +230,7 @@ def sports_flow():
     save_to_duckdb_task(raw_df)
     dbt_transform_task()
     update_history_and_display_task()
+    notify_dashboard_sync()
 
 if __name__ == "__main__":
     sports_flow.serve(
