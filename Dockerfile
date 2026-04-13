@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Keep the container alive so we can run commands inside it
-CMD ["tail", "-f", "/dev/null"]
+CMD ["python", "run_pipeline.py"]

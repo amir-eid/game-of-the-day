@@ -3,7 +3,7 @@ import duckdb
 import pandas as pd
 import feedparser
 import requests
-import os  # Hinzugefügt für Dateiprüfung
+import os  
 from datetime import datetime
 
 st.set_page_config(page_title="Game of the Day Dashboard", layout="wide")
@@ -59,8 +59,8 @@ try:
 
             st.subheader("Today's Top Picks")
             st.dataframe(
-                df_filtered.style.applymap(highlight_scores, subset=['total_watch_score']), 
-                use_container_width=True
+                df_filtered.style.map(highlight_scores, subset=['total_watch_score']), 
+                width="stretch"
             )
 
         with tab2:

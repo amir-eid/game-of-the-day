@@ -148,7 +148,23 @@ def save_to_duckdb_task(df):
 @task
 def dbt_transform_task():
     print("🚀 Triggering dbt transformation...")
-    subprocess.run(["docker", "exec", "sports_app", "dbt", "run"], check=True)
+
+    project_dir = "/app/sports_transform"
+    profiles_dir = "/app"
+    try:
+        result = subprocess.run(
+            ["dbt", "run","--profiles-dir", profiles_dir],
+            cwd=project_dir, 
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        print(result.stdout) 
+    except subprocess.CalledProcessError as e:
+        print(f"❌ dbt failed with return code {e.returncode}")
+        print(f"STDOUT: {e.stdout}")
+        print(f"STDERR: {e.stderr}")
+        raise e
 
 load_dotenv()  # Load environment variables from .env file
 

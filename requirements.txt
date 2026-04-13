@@ -2,3 +2,7 @@ requests
 pandas
 duckdb
 dbt-duckdb
+streamlit
+prefect
+feedparser
+plotly

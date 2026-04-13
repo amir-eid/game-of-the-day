@@ -2,10 +2,18 @@ services:
   app:
     build: .
     container_name: sports_app
+    ports:
+      - "8501:8501"  # Map Streamlit port
     volumes:
       - .:/app  # This links your Mac folder to the container
     environment:
       - DBT_PROFILES_DIR=/app
-    working_dir: /app/sports_transform
+      - PREFECT_API_DATABASE_CONNECTION_TIMEOUT=60
+      - PREFECT_CLIENT_TIMEOUT=60
+    working_dir: /app
+    command: >
+      sh -c "streamlit run dashboard.py --server.port 8501 --server.address 0.0.0.0 &
+      sleep 15 &&
+      python run_pipeline.py"
     stdin_open: true 
     tty: true
