@@ -6,6 +6,7 @@ import requests
 from datetime import datetime
 import pandas as pd
 import subprocess
+import schedule, time
 
 # ── Leagues to fetch ──────────────────────────────────────────────────────────
 LEAGUES = [
@@ -248,9 +249,16 @@ def sports_flow():
     update_history_and_display_task()
     notify_dashboard_sync()
 
+#if __name__ == "__main__":
+ #   sports_flow.serve(
+  #      name="daily-11am-sync",
+   #     cron="0 9 * * *",
+    #    tags=["graz-home-server"]
+    #)
+
+#new test
 if __name__ == "__main__":
-    sports_flow.serve(
-        name="daily-11am-sync",
-        cron="0 9 * * *",
-        tags=["graz-home-server"]
-    )
+    schedule.every().day.at("09:00").do(sports_flow)
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
