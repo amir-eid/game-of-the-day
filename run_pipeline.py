@@ -21,20 +21,58 @@ LEAGUES = [
     ('soccer',     'ger.1',                   'GER.1'),
     ('soccer',     'fra.1',                   'FRA.1'),
     ('soccer',     'ita.1',                   'ITA.1'),
+    ('soccer',     'uefa.champions',          'UEFA Champions League'),
+    ('soccer',     'uefa.europa',             'UEFA Europa League'),
+    ('soccer',     'uefa.europa.conf',        'UEFA Conference League'),
+    ('soccer',     'fifa.world',              'FIFA World Cup'),
+    ('soccer',     'uefa.euro',               'UEFA European Championship'),
+    ('soccer',     'uefa.euroq',              'UEFA European Championship Qualifiers'),
+    ('soccer',     'eng.fa',                  'FA Cup'),
+    ('soccer',     'esp.copa_del_rey',        'Copa del Rey'),
+    ('soccer',     'ned.1',                   'Eredivisie'),
+    ('soccer',     'por.1',                   'Portuguese Primeira Liga'),
+    ('soccer',     'rus.1',                   'Russian Premier League'),
+    ('soccer',     'aut.1',                   'Austrian Bundesliga'),
+    ('soccer',     'tur.1',                   'Turkish Süper Lig'),
+    ('soccer',     'caf.nations',             'Africa Cup of Nations'),
+    ('soccer',     'caf.nations_qual',         'Africa Cup of Nations Qualifiers'),
+    ('soccer',     'conmebol.america',        'Copa America'),
+    ('soccer',     'uefa.nations',            'UEFA Nations League'),
+    ('soccer',     'fifa.olympics',           'Olympic Football Tournament'),
+    ('soccer',     'fifa.worldq.uefa',        'FIFA World Cup Qualifiers - UEFA'),
+    ('soccer',     'fifa.worldq.caf',         'FIFA World Cup Qualifiers - CAF'),
+    ('soccer',     'jpn.1',                   'J1 League'),
+    ('soccer',     'conmebol.libertadores',   'Copa Libertadores'),
+    ('soccer',     'fifa.friendly',           'International Friendlies'),
+
+
+
 ]
 
 # ── Average game durations (hours) ───────────────────────────────────────────
 DURATION_MAP = {
-    'NBA': 2.5, 'NFL': 3.25, 'MLB': 3.0, 'NHL': 2.5,
+    'NBA': 2.5, 'NFL': 3.25, 'MLB': 2.5, 'NHL': 2.5,
     'College Basketball': 2.5, 'College Football': 3.5,
-    'ESP.1': 2.0, 'ENG.1': 2.0, 'GER.1': 2.0, 'FRA.1': 2.0, 'ITA.1': 2.0
+    'ESP.1': 2.0, 'ENG.1': 2.0, 'GER.1': 2.0, 'FRA.1': 2.0, 'ITA.1': 2.0,
+    'UEFA Champions League': 2.0, 'UEFA Europa League': 2.0, 'UEFA Conference League': 2.0,
+    'FIFA World Cup': 2.0, 'UEFA European Championship': 2.0, 'UEFA European Championship Qualifiers': 2.0,
+    'FA Cup': 2.0, 'Copa del Rey': 2.0, 'Eredivisie': 2.0, 'Portuguese Primeira Liga': 2.0,
+    'Russian Premier League': 2.0, 'Austrian Bundesliga': 2.0, 'Turkish Süper Lig': 2.0,
+    'Africa Cup of Nations': 2.0, 'Africa Cup of Nations Qualifiers': 2.0, 'Copa America': 2.0,
+    'UEFA Nations League': 2.0, 'Olympic Football Tournament': 2.0, 'FIFA World Cup Qualifiers - UEFA': 2.0,
+    'FIFA World Cup Qualifiers - CAF': 2.0, 'J1 League': 2.0, 'Copa Libertadores': 2.0, 'International Friendlies': 2.0
 }
 
 # ── Score weights ─────────────────────────────────────────────────────────────
 LEAGUE_POINTS = {
-    'NFL': 20, 'NBA': 18, 'MLB': 16, 'ESP.1': 14, 'NHL': 12,
-    'ENG.1': 10, 'College Basketball': 8, 'College Football': 6,
-    'GER.1': 4, 'FRA.1': 3, 'ITA.1': 2
+    'NFL': 20, 'NBA': 18, 'MLB': 16, 'ESP.1': 14, 'NHL': 12, 'ENG.1': 10, 'College Basketball': 8, 'College Football': 6,
+    'GER.1': 4, 'FRA.1': 3, 'ITA.1': 2, 'UEFA Champions League': 2, 'UEFA Europa League': 1.5, 'UEFA Conference League': 1,
+    'FIFA World Cup': 25, 'UEFA European Championship': 20, 'UEFA European Championship Qualifiers': 15,
+    'FA Cup': 1, 'Copa del Rey': 1, 'Eredivisie': 0.5, 'Portuguese Primeira Liga': 0.5,
+    'Russian Premier League': 0.5, 'Austrian Bundesliga': 2, 'Turkish Süper Lig': 0.5,
+    'Africa Cup of Nations': 2, 'Africa Cup of Nations Qualifiers': 2, 'Copa America': 0.5,
+    'UEFA Nations League': 0.5, 'Olympic Football Tournament': 0.5, 'FIFA World Cup Qualifiers - UEFA': 0.5,
+    'FIFA World Cup Qualifiers - CAF': 0.5, 'J1 League': 0.5, 'Copa Libertadores': 0.5, 'International Friendlies': 0.25
 }
 FAVORITE_BONUS   = 30
 PLAYOFF_BONUS    = 25
@@ -47,7 +85,8 @@ TOP_N            = 5
 # ── Personal preferences ─────────────────────────────────────────────────────
 FAVORITE_TEAMS = [
     'Miami Heat', 'Carolina Panthers',
-    'Illinois Fighting Illini', 'San Diego Padres', 'Valencia'
+    'Illinois Fighting Illini', 'San Diego Padres', 'Valencia',
+    'Austria National Team', 'Egypt National Team', 'Poland National Team'
 ]
 
 DERBIES = [
@@ -58,6 +97,14 @@ DERBIES = [
     ('Bayern Munich',       'Borussia Dortmund'),
     ('Arsenal',             'Tottenham Hotspur'),
     ('Manchester United',   'Manchester City'),
+    ('Juventus',            'Inter Milan'),
+    ('River Plate',         'Boca Juniors'),
+    ('Red Bull Salzburg',   'Rapid Wien'),
+    ('Galatasaray',         'Fenerbahçe'),
+    ('Paris Saint-Germain', 'Olympique de Marseille'),
+    ('Ajax',                'Feyenoord'),
+    ('Benfica',             'Porto'),
+    ('Galatasaray',         'Besiktas'),
     # Add more derbies here
 ]
 
@@ -218,7 +265,7 @@ def update_history_and_display_task():
 
     # Format a nice message for your phone
     discord_msg = "🏁 **DAILY TOP PICKS** 🏁\n"
-    for _, row in df.head(5).iterrows(): # Just top 5 for mobile clarity
+    for _, row in df.head(10).iterrows(): # Just top 10 for mobile clarity
         star = "⭐" if "Favorite" in str(row['tags']) else "🔹"
         discord_msg += f"{star} **{row['score']} pts** | {row['league']}\n"
         discord_msg += f"> {row['matchup']} at {row['time']}\n\n"
