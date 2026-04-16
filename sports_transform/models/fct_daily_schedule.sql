@@ -1,7 +1,35 @@
-with base as (
-    select * from {{ source('external_data', 'raw_games') }}
+with raw_games_source as (
+    select
+        "League",
+        "Away Team",
+        "Home Team",
+        "Away Record",
+        "Home Record",
+        "Date",
+        "Time (CET)",
+        "End Time (CET)",
+        "Is Playoff"
+    from {{ source('external_data', 'raw_games') }}
 ),
 
+    raw_ufc_source as (
+        select
+            'UFC' as "League",
+            "Fighter_B" as "Away Team",
+            "Fighter_A" as "Home Team",
+            '0-0' as "Away Record",
+            '0-0' as "Home Record",
+            "Date",
+            "Time_CET" as "Time (CET)",
+            strftime(date_add(CAST("Date" || ' ' || "Time_CET" AS TIMESTAMP), interval 30 minute), '%H:%M') as "End Time (CET)",
+            false as "Is Playoff"
+        from {{ source('external_data', 'raw_ufc') }}
+    ),
+base as (
+    select * from raw_games_source
+    union all
+    select * from raw_ufc_source
+),
 -- This is where we create the "missing" columns based on your preferences
 logic as (
     select
@@ -24,12 +52,12 @@ logic as (
 
         -- 3. WIN PERCENTAGE LOGIC (Parsing "10-5" style records)
         -- This looks complex but it just handles the math of Wins / (Wins + Losses)
-        try_cast(split_part("Home Record", '-', 1) as float) / 
-            NULLIF((try_cast(split_part("Home Record", '-', 1) as float) + try_cast(split_part("Home Record", '-', 2) as float)), 0) 
+        coalesce(try_cast(split_part("Home Record", '-', 1) as float) / 
+            NULLIF((try_cast(split_part("Home Record", '-', 1) as float) + try_cast(split_part("Home Record", '-', 2) as float)), 0), 0) 
         as home_win_pct,
         
-        try_cast(split_part("Away Record", '-', 1) as float) / 
-            NULLIF((try_cast(split_part("Away Record", '-', 1) as float) + try_cast(split_part("Away Record", '-', 2) as float)), 0) 
+        coalesce(try_cast(split_part("Away Record", '-', 1) as float) / 
+            NULLIF((try_cast(split_part("Away Record", '-', 1) as float) + try_cast(split_part("Away Record", '-', 2) as float)), 0), 0) 
         as away_win_pct,
 
         0 as has_streak -- Placeholder for now unless you scrape streak data
@@ -41,7 +69,7 @@ calculated_scores as (
         *,
         -- LEAGUE POINTS
         case 
-            when "League" = 'NFL' then 20 when "League" = 'NBA' then 18
+            when "League" = 'NFL' then 20 when "League" = 'NBA' then 18 when "League" = 'UFC' then 5
             when "League" = 'MLB' then 16 when "League" = 'ESP.1' then 14 when "League" = 'Olympic Ice Hockey' then 2
             when "League" = 'World Baseball Classic' then 15 when "League" = 'NHL' then 12 when "League" = 'ENG.1' then 10
             when "League" = 'College Basketball' then 8 when "League" = 'College Football' then 6
@@ -71,7 +99,7 @@ calculated_scores as (
 )
 
 select
-    "League", "Away Team", "Home Team", "Time (CET)", "End Time (CET)",
+    "League", "Away Team", "Home Team", "Time (CET)", "End Time (CET)", "Is Playoff",
     (league_pts + favorite_pts + playoff_pts + derby_pts + streak_pts + record_pts) as total_watch_score,
     -- Simple tagging
     case when is_favorite = 1 then '⭐ Favorite ' else '' end || 

@@ -178,6 +178,56 @@ def fetch_league(sport, league_slug, league_name):
         print(f"Error fetching {league_name}: {e}")
         return pd.DataFrame()
 
+@task(retries=3, retry_delay_seconds=60)
+def fetch_ufc_task():
+    """Fetch today's UFC fights from the ESPN-API."""
+    print("🥊 Scraping UFC events...")
+    url = "http://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard"
+    
+    try:
+        response = requests.get(url)
+        data = response.json()
+        all_fights = []
+        
+        for event in data.get('events', []):
+            # ESPN Datum konvertieren
+            dt_cet = pd.to_datetime(event.get('date')).tz_convert('Europe/Vienna')
+            
+            for comp in event.get('competitions', []):
+                fighters = []
+                for competitor in comp.get('competitors', []):
+                    # Fallback Logik: Erst athlete, dann team
+                    name = "Unbekannt"
+                    if 'athlete' in competitor:
+                        name = competitor['athlete'].get('displayName')
+                    elif 'team' in competitor:
+                        name = competitor['team'].get('displayName')
+                    fighters.append(name)
+                
+                if len(fighters) >= 2:
+                    all_fights.append({
+                        'Fighter_A': fighters[0],
+                        'Fighter_B': fighters[1],
+                        'Event_Name': event.get('name'),
+                        'Date': dt_cet.strftime('%Y-%m-%d'),
+                        'Time_CET': dt_cet.strftime('%H:%M'),
+                        'League': 'UFC'
+                    })
+        
+        return pd.DataFrame(all_fights)
+    except Exception as e:
+        print(f"❌ Fehler beim UFC Scraping: {e}")
+        return pd.DataFrame()
+
+@task
+def save_ufc_to_duckdb(df):
+    if df.empty:
+        print("No UFC fights found for today. Skipping DuckDB save.")
+        return
+    print(f"💾 Save {len(df)} UFC fights in DuckDB...")
+    con = duckdb.connect('sports.duckdb')
+    con.execute("CREATE OR REPLACE TABLE raw_ufc AS SELECT * FROM df")
+    con.close()
 
 def fetch_all_leagues():
     """Fetch today's games for all configured leagues."""
@@ -295,7 +345,9 @@ def notify_dashboard_sync():
 def sports_flow():
     # Execute the tasks in order
     raw_df = scrape_task()
+    ufc_df = fetch_ufc_task()   
     save_to_duckdb_task(raw_df)
+    save_ufc_to_duckdb(ufc_df)
     dbt_transform_task()
     update_history_and_display_task()
     notify_dashboard_sync()
