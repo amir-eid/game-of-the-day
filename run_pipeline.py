@@ -296,22 +296,22 @@ def sports_flow():
     update_history_and_display_task()
     notify_dashboard_sync()
 
-#if __name__ == "__main__":
- #   sports_flow.serve(
-  #      name="daily-11am-sync",
-   #     cron="0 9 * * *",
-    #    tags=["graz-home-server"]
-    #)
+if __name__ == "__main__":
+    sports_flow.serve(
+        name="daily-11am-sync",
+        cron="0 9 * * *",
+        tags=["graz-home-server"]
+    )
 
 #new test
-if __name__ == "__main__":
+#if __name__ == "__main__":
     #print("Test Run")  This will run the flow immediately for testing purposes. Uncomment to use.
     #sports_flow()
 
-    print("Scheduling daily runs at 09:00")
-    schedule.every().day.at("09:00").do(sports_flow)
+   # print("Scheduling daily runs at 09:00")
+   # schedule.every().day.at("09:00").do(sports_flow)
 
-    (print("Pipeline scheduled. Waiting for next run..."))
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
+    #(print("Pipeline scheduled. Waiting for next run..."))
+    #while True:
+     #   schedule.run_pending()
+      #  time.sleep(60)
