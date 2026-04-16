@@ -64,40 +64,50 @@ try:
             )
 
         with tab2:
-            st.subheader("📰 Focused News: Top 5 Recommendations")
-            top_5_df = df_filtered.head(5)
-            if not top_5_df.empty:
-                priority_teams = pd.concat([top_5_df['Home Team'], top_5_df['Away Team']]).unique().tolist()
-                st.info(f"Searching specific news for: {', '.join(priority_teams)}")
-
-                headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
-                sources = {
-                    "CBS Sports": "https://www.cbssports.com/rss/external/headlines/",
-                    "Yahoo Sports": "https://sports.yahoo.com/rss/",
-                    "ESPN": "https://www.espn.com/espn/rss/news",
-                    "Sky Sports": "https://www.skysports.com/rss/12040"
-                }
-
-                found_articles = []
-                for name, url in sources.items():
-                    try:
-                        r = requests.get(url, headers=headers, timeout=5)
-                        feed = feedparser.parse(r.text)
-                        for entry in feed.entries:
-                            content = (entry.title + " " + entry.get('summary', '')).lower()
-                            if any(team.lower() in content for team in priority_teams):
-                                found_articles.append((name, entry))
-                    except: continue
-
-                if found_articles:
-                    for source_name, entry in found_articles[:10]:
-                        with st.expander(f"⭐ {entry.title} ({source_name})"):
-                            st.write(entry.get('summary', 'No details available.'))
-                            st.markdown(f"[Read Article]({entry.link})")
-                else:
-                    st.write("No specific news found for your top games yet.")
+            st.subheader("📰 Personalized Scouting Report")
+    
+            # Wir nehmen die Top 3-5 Spiele für die News-Suche
+            top_games = df_filtered.head(5)
+    
+            if not top_games.empty:
+            # Wir loopen durch die Top-Spiele, um News pro Matchup anzuzeigen
+                for _, game in top_games.iterrows():
+                    matchup = f"{game['Away Team']} vs {game['Home Team']}"
+                    with st.container():
+                        st.markdown(f"#### News for: **{matchup}**")
+                
+                        # Wir bauen eine gezielte Google News URL für die Teams
+                        # hl=en-US für englische News, q=Suchbegriff
+                        query = f"{game['Away Team']} {game['Home Team']}".replace(" ", "+")
+                        gn_url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
+                
+                        try:
+                            # Wir nutzen feedparser direkt auf der Google News Suche
+                            # Das ist viel treffsicherer als allgemeine Feeds
+                            gn_feed = feedparser.parse(gn_url)
+                    
+                            if gn_feed.entries:
+                                # Zeige die Top 2 relevantesten Artikel pro Matchup
+                                cols = st.columns(2)
+                                for i, entry in enumerate(gn_feed.entries[:2]):
+                                    with cols[i]:
+                                        # Zeitstempel hübsch machen
+                                        pub_date = entry.get('published', '')[:16]
+                                        st.markdown(f"""
+                                        <div style="border: 1px solid #444; padding: 10px; border-radius: 5px; height: 180px;">
+                                            <p style="font-size: 0.8rem; color: #888;">{entry.source.get('title', 'News')} | {pub_date}</p>
+                                            <h6 style="margin-top: 0;">{entry.title}</h6>
+                                            <a href="{entry.link}" target="_blank">Read Story</a>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                            else:
+                                st.write("No specific headlines found for this matchup in the last 24h.")
+                        except Exception as e:
+                            st.error(f"Could not load news for {matchup}")
+                
+                        st.divider()
             else:
-                st.write("No games selected.")
+                st.info("No games selected to generate a news report.")
 
         with tab3:
             st.subheader("📅 League Season Tracker")
