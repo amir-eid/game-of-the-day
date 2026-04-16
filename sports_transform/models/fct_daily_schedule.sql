@@ -47,6 +47,12 @@ with raw_games_source as (
     raw_npb_source as (
     select * from {{ source('external_data', 'raw_npb') }}
 ),
+    raw_eurobasket_source as (
+    select * from {{ source('external_data', 'raw_eurobasket') }}
+),
+    raw_boxing_source as (
+    select * from {{ source('external_data', 'raw_boxing') }}
+),
 base as (
     select * from raw_games_source
     union all
@@ -57,6 +63,10 @@ base as (
     select * from raw_sumo_source
     union all
     select * from raw_npb_source
+    union all
+    select * from raw_eurobasket_source
+    union all
+    select * from raw_boxing_source
 ),
 -- This is where we create the "missing" columns based on your preferences
 logic as (
@@ -114,6 +124,7 @@ calculated_scores as (
             when "League" = 'Olympic Football Tournament' then 0.5 when "League" = 'FIFA World Cup Qualifiers - UEFA' then 0.5
             when "League" = 'FIFA World Cup Qualifiers - CAF' then 0.5 when "League" = 'J1 League' then 0.5 
             when "League" = 'Copa Libertadores' then 0.5 when "League" = 'International Friendlies' then 0.5
+            when "League" = 'EuroLeague' then 0.5 when "League" = 'ABA' then 0.5 when "League" = 'Boxing' then 10
             else 0
         end as league_pts,
         

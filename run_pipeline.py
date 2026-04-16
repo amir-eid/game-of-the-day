@@ -180,6 +180,124 @@ def fetch_league(sport, league_slug, league_name):
 
 load_dotenv()
 
+@task(retries=3)
+def fetch_basketball_task():
+    """Holt EuroLeague und ABA Daten via SerpApi."""
+    print("🏀 Fetching Basketball (EuroLeague & ABA) via SerpApi...")
+    api_key = os.getenv("SERPAPI_KEY")  
+    
+    queries = ["EuroLeague schedule today", "ABA Liga schedule today"]
+    all_baskets = []
+    
+    for q in queries:
+        params = {"engine": "google", "q": q, "api_key": api_key, "hl": "en"}
+        try:
+            res = requests.get("https://serpapi.com/search", params=params).json()
+            games = res.get("sports_results", {}).get("games", [])
+            league_name = "EuroLeague" if "EuroLeague" in q else "ABA"
+            
+            for g in games:
+                all_baskets.append({
+                    'League': league_name,
+                    'Away Team': g['teams'][0].get('name'),
+                    'Home Team': g['teams'][1].get('name'),
+                    'Away Record': g['teams'][0].get('record', '0-0'),
+                    'Home Record': g['teams'][1].get('record', '0-0'),
+                    'Date': datetime.now().strftime('%Y-%m-%d'),
+                    'Time (CET)': '20:00', # Meist Abendspiele
+                    'End Time (CET)': '22:00',
+                    'Is Playoff': False
+                })
+        except Exception as e:
+            print(f"⚠️ Error fetching {q}: {e}")
+            
+    return pd.DataFrame(all_baskets)
+
+@task(retries=3)
+def fetch_boxing_task():
+    """Holt nur relevante Boxkämpfe (Titelkämpfe oder Favoriten)."""
+    print("🥊 Fetching curated Boxing matches via SerpApi...")
+    api_key = os.getenv("SERPAPI_KEY")
+    
+    # Hier deine Favoriten eintragen (Teile des Namens reichen)
+    my_boxers = [
+        'Canelo', 'Usyk', 'Fury', 'Joshua', 'Inoue', 'Crawford', 
+        'Davis', 'Haney', 'Bivol', 'Garcia', 'Loma'
+    ]
+    
+    params = {
+        "engine": "google",
+        "q": "major boxing fights today", 
+        "api_key": api_key,
+        "hl": "en"
+    }
+    
+    try:
+        res = requests.get("https://serpapi.com/search", params=params, timeout=15).json()
+        all_matches = res.get('sports_results', {}).get('games', [])
+        
+        filtered_fights = []
+        for match in all_matches:
+            # Wir extrahieren die Namen und die Event-Beschreibung
+            name_str = " ".join([t.get('name', '') for t in match.get('teams', [])]).lower()
+            event_note = match.get('status', '').lower() + match.get('league', '').lower()
+            
+            # Filter-Logik:
+            # 1. Ist einer deiner Boxer dabei?
+            is_favorite = any(boxer.lower() in name_str for boxer in my_boxers)
+            
+            # 2. Is it a title bout? (Searching for 'Title', 'WBC', 'WBA', 'IBF', 'WBO')
+            is_title_bout = any(word in event_note or word in name_str 
+                                for word in ['title', 'wbc', 'wba', 'ibf', 'wbo', 'undisputed', 'world'])
+
+            if is_favorite or is_title_bout:
+                filtered_fights.append({
+                    'League': 'Boxing',
+                    'Away Team': match['teams'][0].get('name'),
+                    'Home Team': match['teams'][1].get('name'),
+                    'Away Record': 'Favorite' if is_favorite else 'Title Fight',
+                    'Home Record': match.get('venue', 'Pro Boxing'), # Wir nutzen Record-Feld für Infos
+                    'Date': datetime.now().strftime('%Y-%m-%d'),
+                    'Time (CET)': '22:00',
+                    'End Time (CET)': '01:00',
+                    'Is Playoff': is_title_bout # We use Is Playoff for "Title Fight" marking
+                })
+        
+        df = pd.DataFrame(filtered_fights)
+        print(f"✅ {len(df)} relevante Boxkämpfe gefunden.")
+        return df
+    except Exception as e:
+        print(f"❌ Boxing Filter Error: {e}")
+        return pd.DataFrame()
+    
+def generic_save_to_duckdb(df, table_name):
+    con = duckdb.connect('sports.duckdb')
+    if df is None or df.empty:
+        con.execute(f"""
+            CREATE TABLE IF NOT EXISTS {table_name} (
+                "League" VARCHAR,
+                "Away Team" VARCHAR,
+                "Home Team" VARCHAR, 
+                "Away Record" VARCHAR,
+                "Home Record" VARCHAR, 
+                Date VARCHAR,
+                "Time (CET)" VARCHAR,
+                "End Time (CET)" VARCHAR, 
+                "Is Playoff" BOOLEAN
+            )
+        """)
+    else:
+        con.execute(f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM df")
+    con.close()
+
+@task(name="Save Basketball to DuckDB")
+def save_basketball_to_duckdb(df):
+    generic_save_to_duckdb(df, "raw_eurobasket")
+
+@task(name="Save Boxing to DuckDB")
+def save_boxing_to_duckdb(df):
+    generic_save_to_duckdb(df, "raw_boxing")
+
 @task(retries=3, retry_delay_seconds=60)
 def fetch_npb_task():
     """Holt ECHTE NPB-Daten via SerpApi (Google Search Results)."""
@@ -578,12 +696,16 @@ def sports_flow():
     f1_df = fetch_f1_task()
     sumo_df = fetch_sumo_task()
     npb_df = fetch_npb_task()
+    eurobasket_df = fetch_basketball_task()
+    boxing_df = fetch_boxing_task()
     #saving  
     save_to_duckdb_task(raw_df)
     save_ufc_to_duckdb(ufc_df)
     save_f1_to_duckdb(f1_df)
     save_sumo_to_duckdb(sumo_df)
     save_npb_to_duckdb(npb_df)
+    save_basketball_to_duckdb(eurobasket_df)
+    save_boxing_to_duckdb(boxing_df)
     #transformation & display
     dbt_transform_task()
     update_history_and_display_task()

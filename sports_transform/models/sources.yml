@@ -9,3 +9,5 @@ sources:
       - name: raw_f1
       - name: raw_sumo
       - name: raw_npb
+      - name: raw_eurobasket
+      - name: raw_boxing
