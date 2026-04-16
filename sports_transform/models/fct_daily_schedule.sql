@@ -42,15 +42,15 @@ calculated_scores as (
         -- LEAGUE POINTS
         case 
             when "League" = 'NFL' then 20 when "League" = 'NBA' then 18
-            when "League" = 'MLB' then 16 when "League" = 'ESP.1' then 14
-            when "League" = 'NHL' then 12 when "League" = 'ENG.1' then 10
+            when "League" = 'MLB' then 16 when "League" = 'ESP.1' then 14 when "League" = 'Olympic Ice Hockey' then 2
+            when "League" = 'World Baseball Classic' then 15 when "League" = 'NHL' then 12 when "League" = 'ENG.1' then 10
             when "League" = 'College Basketball' then 8 when "League" = 'College Football' then 6
-            when "League" = 'GER.1' then 4 when "League" = 'FRA.1' then 3
+            when "League" = 'GER.1' then 4 when "League" = 'FRA.1' then 3 when "League" = 'FIBA World Cup' then 5
             when "League" = 'ITA.1' then 2 when "League" = 'UEFA Champions League' then 2
             when "League" = 'UEFA Europa League' then 1.5 when "League" = 'UEFA Conference League' then 1
             when "League" = 'FIFA World Cup' then 25 when "League" = 'UEFA European Championship' then 20
             when "League" = 'UEFA European Championship Qualifiers' then 15 when "League" = 'FA Cup' then 1
-            when "League" = 'Copa del Rey' then 1 when "League" = 'Eredivisie' then 0.5
+            when "League" = 'Copa del Rey' then 1 when "League" = 'Eredivisie' then 0.5 when "League" = 'Olympics Basketball' then 5
             when "League" = 'Portuguese Primeira Liga' then 0.5 when "League" = 'Russian Premier League' then 0.5
             when "League" = 'Austrian Bundesliga' then 2 when "League" = 'Turkish Süper Lig' then 0.5
             when "League" = 'Africa Cup of Nations' then 2 when "League" = 'Africa Cup of Nations Qualifiers' then 2

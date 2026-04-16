@@ -13,8 +13,12 @@ LEAGUES = [
     ('basketball', 'nba',                     'NBA'),
     ('football',   'nfl',                     'NFL'),
     ('baseball',   'mlb',                     'MLB'),
+    ('baseball',   'world-baseball-classic',  'World Baseball Classic'),
     ('hockey',     'nhl',                     'NHL'),
+    ('hockey',     'olympics-mens-ice-hockey','Olympic Ice Hockey'),
     ('basketball', 'mens-college-basketball', 'College Basketball'),
+    ('basketball', 'fiba',                    'FIBA World Cup'),
+    ('basketball', 'mens-olympics-basketball','Olympic Basketball'),
     ('football',   'college-football',        'College Football'),
     ('soccer',     'esp.1',                   'ESP.1'),
     ('soccer',     'eng.1',                   'ENG.1'),
@@ -51,9 +55,9 @@ LEAGUES = [
 
 # ── Average game durations (hours) ───────────────────────────────────────────
 DURATION_MAP = {
-    'NBA': 2.5, 'NFL': 3.25, 'MLB': 2.5, 'NHL': 2.5,
-    'College Basketball': 2.5, 'College Football': 3.5,
-    'ESP.1': 2.0, 'ENG.1': 2.0, 'GER.1': 2.0, 'FRA.1': 2.0, 'ITA.1': 2.0,
+    'NBA': 2.5, 'NFL': 3.25, 'MLB': 2.5, 'World Baseball Classic': 3, 'NHL': 2.5,
+    'College Basketball': 2.5, 'College Football': 3.5, 'FIBA World Cup': 2.5, 'Olympic Ice Hockey': 2.5,
+    'ESP.1': 2.0, 'ENG.1': 2.0, 'GER.1': 2.0, 'FRA.1': 2.0, 'ITA.1': 2.0, 'Olympic Basketball': 2.5,
     'UEFA Champions League': 2.0, 'UEFA Europa League': 2.0, 'UEFA Conference League': 2.0,
     'FIFA World Cup': 2.0, 'UEFA European Championship': 2.0, 'UEFA European Championship Qualifiers': 2.0,
     'FA Cup': 2.0, 'Copa del Rey': 2.0, 'Eredivisie': 2.0, 'Portuguese Primeira Liga': 2.0,
@@ -64,23 +68,23 @@ DURATION_MAP = {
 }
 
 # ── Score weights ─────────────────────────────────────────────────────────────
-LEAGUE_POINTS = {
-    'NFL': 20, 'NBA': 18, 'MLB': 16, 'ESP.1': 14, 'NHL': 12, 'ENG.1': 10, 'College Basketball': 8, 'College Football': 6,
-    'GER.1': 4, 'FRA.1': 3, 'ITA.1': 2, 'UEFA Champions League': 2, 'UEFA Europa League': 1.5, 'UEFA Conference League': 1,
-    'FIFA World Cup': 25, 'UEFA European Championship': 20, 'UEFA European Championship Qualifiers': 15,
-    'FA Cup': 1, 'Copa del Rey': 1, 'Eredivisie': 0.5, 'Portuguese Primeira Liga': 0.5,
-    'Russian Premier League': 0.5, 'Austrian Bundesliga': 2, 'Turkish Süper Lig': 0.5,
-    'Africa Cup of Nations': 2, 'Africa Cup of Nations Qualifiers': 2, 'Copa America': 0.5,
-    'UEFA Nations League': 0.5, 'Olympic Football Tournament': 0.5, 'FIFA World Cup Qualifiers - UEFA': 0.5,
-    'FIFA World Cup Qualifiers - CAF': 0.5, 'J1 League': 0.5, 'Copa Libertadores': 0.5, 'International Friendlies': 0.25
-}
-FAVORITE_BONUS   = 30
-PLAYOFF_BONUS    = 25
-DERBY_BONUS      = 15
-STREAK_BONUS     = 15
-MAX_TABLE_POINTS = 10
-TIME_CUTOFF      = '02:00'
-TOP_N            = 5
+#LEAGUE_POINTS = {
+ #   'NFL': 20, 'NBA': 18, 'MLB': 16, 'World Baseball Classic': 15, 'ESP.1': 14, 'NHL': 12, 'ENG.1': 10, 'College Basketball': 8,
+  #  'College Football': 6, 'GER.1': 4, 'FRA.1': 3, 'ITA.1': 2, 'UEFA Champions League': 2, 'UEFA Europa League': 1.5,
+   # 'UEFA Conference League': 1, 'FIFA World Cup': 25, 'UEFA European Championship': 20, 'FIBA World Cup': 5,
+    #'UEFA European Championship Qualifiers': 15, 'FA Cup': 1, 'Copa del Rey': 1, 'Eredivisie': 0.5, 'Portuguese Primeira Liga': 0.5,
+    #'Russian Premier League': 0.5, 'Austrian Bundesliga': 2, 'Turkish Süper Lig': 0.5, 'Olympic Basketball': 5,
+    #'Africa Cup of Nations': 2, 'Africa Cup of Nations Qualifiers': 2, 'Copa America': 0.5, 'Olympic Ice Hockey': 2,
+    #'UEFA Nations League': 0.5, 'Olympic Football Tournament': 0.5, 'FIFA World Cup Qualifiers - UEFA': 0.5,
+    #'FIFA World Cup Qualifiers - CAF': 0.5, 'J1 League': 0.5, 'Copa Libertadores': 0.5, 'International Friendlies': 0.25
+#}
+#FAVORITE_BONUS   = 30
+#PLAYOFF_BONUS    = 25
+#DERBY_BONUS      = 15
+#STREAK_BONUS     = 15
+#MAX_TABLE_POINTS = 10
+#TIME_CUTOFF      = '02:00'
+#TOP_N            = 5
 
 # ── Personal preferences ─────────────────────────────────────────────────────
 FAVORITE_TEAMS = [
@@ -265,7 +269,7 @@ def update_history_and_display_task():
 
     # Format a nice message for your phone
     discord_msg = "🏁 **DAILY TOP PICKS** 🏁\n"
-    for _, row in df.head(10).iterrows(): # Just top 10 for mobile clarity
+    for _, row in df.head(10).iterrows(): 
         star = "⭐" if "Favorite" in str(row['tags']) else "🔹"
         discord_msg += f"{star} **{row['score']} pts** | {row['league']}\n"
         discord_msg += f"> {row['matchup']} at {row['time']}\n\n"
