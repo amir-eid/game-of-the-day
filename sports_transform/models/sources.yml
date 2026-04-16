@@ -6,3 +6,4 @@ sources:
     tables:
       - name: raw_games
       - name: raw_ufc
+      - name: raw_f1

@@ -177,6 +177,43 @@ def fetch_league(sport, league_slug, league_name):
     except Exception as e:
         print(f"Error fetching {league_name}: {e}")
         return pd.DataFrame()
+    
+@task(retries=3, retry_delay_seconds=60)
+def fetch_f1_task():
+    """Scrape today's F1 events from the ESPN-API."""
+    print("🏎️ Scraping F1 events...")
+    url = "http://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard"
+    
+    try:
+        response = requests.get(url)
+        data = response.json()
+        f1_events = []
+        
+        for event in data.get('events', []):
+            dt_cet = pd.to_datetime(event.get('date')).tz_convert('Europe/Vienna')
+            
+            # Wir nehmen den Namen des Grand Prix und die spezifische Session
+            f1_events.append({
+                'Event_Name': event.get('name'),
+                'Circuit': event.get('venue', {}).get('fullName', 'Unknown Circuit'),
+                'Date': dt_cet.strftime('%Y-%m-%d'),
+                'Time_CET': dt_cet.strftime('%H:%M'),
+                'League': 'F1'
+            })
+        
+        return pd.DataFrame(f1_events)
+    except Exception as e:
+        print(f"❌ Fehler beim F1 Scraping: {e}")
+        return pd.DataFrame()
+
+@task
+def save_f1_to_duckdb(df):
+    if df.empty:
+        print("No F1 events found for today. Skipping DuckDB save.")
+        return
+    con = duckdb.connect('sports.duckdb')
+    con.execute("CREATE OR REPLACE TABLE raw_f1 AS SELECT * FROM df")
+    con.close()
 
 @task(retries=3, retry_delay_seconds=60)
 def fetch_ufc_task():
@@ -343,11 +380,15 @@ def notify_dashboard_sync():
 
 @flow(name="Sports Data Pipeline", log_prints=True)
 def sports_flow():
-    # Execute the tasks in order
+    #scraping
     raw_df = scrape_task()
-    ufc_df = fetch_ufc_task()   
+    ufc_df = fetch_ufc_task() 
+    f1_df = fetch_f1_task()
+    #saving  
     save_to_duckdb_task(raw_df)
     save_ufc_to_duckdb(ufc_df)
+    save_f1_to_duckdb(f1_df)
+    #transformation & display
     dbt_transform_task()
     update_history_and_display_task()
     notify_dashboard_sync()

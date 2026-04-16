@@ -25,10 +25,26 @@ with raw_games_source as (
             false as "Is Playoff"
         from {{ source('external_data', 'raw_ufc') }}
     ),
+
+    raw_f1_source as (
+    select 
+        'F1' as "League",
+        "Event_Name" as "Away Team",
+        "Circuit" as "Home Team",
+        'N/A' as "Away Record",
+        'N/A' as "Home Record",
+        "Date",
+        "Time_CET" as "Time (CET)",
+        strftime(date_add(CAST("Date" || ' ' || "Time_CET" AS TIMESTAMP), interval 2 hour), '%H:%M') as "End Time (CET)",
+        false as "Is Playoff"
+    from {{ source('external_data', 'raw_f1') }}
+),
 base as (
     select * from raw_games_source
     union all
     select * from raw_ufc_source
+    union all
+    select * from raw_f1_source
 ),
 -- This is where we create the "missing" columns based on your preferences
 logic as (
@@ -69,7 +85,7 @@ calculated_scores as (
         *,
         -- LEAGUE POINTS
         case 
-            when "League" = 'NFL' then 20 when "League" = 'NBA' then 18 when "League" = 'UFC' then 5
+            when "League" = 'NFL' then 20 when "League" = 'NBA' then 18 when "League" = 'UFC' then 5 when "League" = 'F1' then 10
             when "League" = 'MLB' then 16 when "League" = 'ESP.1' then 14 when "League" = 'Olympic Ice Hockey' then 2
             when "League" = 'World Baseball Classic' then 15 when "League" = 'NHL' then 12 when "League" = 'ENG.1' then 10
             when "League" = 'College Basketball' then 8 when "League" = 'College Football' then 6
