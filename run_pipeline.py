@@ -177,6 +177,173 @@ def fetch_league(sport, league_slug, league_name):
     except Exception as e:
         print(f"Error fetching {league_name}: {e}")
         return pd.DataFrame()
+
+load_dotenv()
+
+@task(retries=3, retry_delay_seconds=60)
+def fetch_npb_task():
+    """Holt ECHTE NPB-Daten via SerpApi (Google Search Results)."""
+    print("🛰️ Fetching live NPB matchups via SerpApi...")
+    
+    api_key = os.getenv("SERPAPI_KEY")
+    params = {
+        "engine": "google",
+        "q": "NPB schedule today",
+        "api_key": api_key,
+        "hl": "en", # Wir nutzen Englisch für konsistente Teamnamen
+        "gl": "us"
+    }
+    
+    try:
+        response = requests.get("https://serpapi.com/search", params=params, timeout=15)
+        data = response.json()
+        
+        # SerpApi extrahiert Sportergebnisse in 'sports_results'
+        sports_results = data.get("sports_results", {})
+        games_list = sports_results.get("games", [])
+        
+        # Falls Google keine 'games' Liste zeigt (oft bei Einzelspielen), 
+        # schauen wir in 'game_spotlight'
+        if not games_list and "game_spotlight" in sports_results:
+            games_list = [sports_results["game_spotlight"]]
+
+        bouts = []
+        for game in games_list:
+            teams = game.get("teams", [])
+            if len(teams) >= 2:
+                # Wir mappen die Google-Struktur auf dein Dashboard-Schema
+                bouts.append({
+                    'League': 'NPB',
+                    'Away Team': teams[0].get("name"),
+                    'Home Team': teams[1].get("name"),
+                    'Away Record': teams[0].get("record", "0-0"),
+                    'Home Record': teams[1].get("record", "0-0"),
+                    'Date': datetime.now().strftime('%Y-%m-%d'),
+                    'Time (CET)': '11:00', # Standardzeit für Japan-Spiele
+                    'End Time (CET)': '14:30',
+                    'Is Playoff': False
+                })
+        
+        if not bouts:
+            print("📭 Keine aktuellen NPB-Spiele in den Google-Ergebnissen gefunden.")
+            return pd.DataFrame()
+            
+        df = pd.DataFrame(bouts)
+        print(f"✅ {len(df)} echte NPB Matchups erfolgreich geladen!")
+        return df
+
+    except Exception as e:
+        print(f"❌ SerpApi Error: {e}")
+        return pd.DataFrame()
+
+@task(name="Save NPB to DuckDB")
+def save_npb_to_duckdb(df):
+    """Speichert die NPB-Spiele in der DuckDB Tabelle 'raw_npb'."""
+    db_path = 'sports.duckdb'
+    con = duckdb.connect(db_path)
+    
+    try:
+        if df is None or df.empty:
+            print("⚠️ Keine NPB-Daten gefunden. Initialisiere leere Tabelle für dbt...")
+            # Erstellt das Schema, falls die Tabelle noch gar nicht existiert
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS raw_npb (
+                    "League" VARCHAR,
+                    "Away Team" VARCHAR,
+                    "Home Team" VARCHAR,
+                    "Away Record" VARCHAR,
+                    "Home Record" VARCHAR,
+                    "Date" VARCHAR,
+                    "Time (CET)" VARCHAR,
+                    "End Time (CET)" VARCHAR,
+                    "Is Playoff" BOOLEAN
+                )
+            """)
+        else:
+            # Speichert die echten Daten und überschreibt die alte Tabelle
+            con.execute("CREATE OR REPLACE TABLE raw_npb AS SELECT * FROM df")
+            count = con.execute("SELECT count(*) FROM raw_npb").fetchone()[0]
+            print(f"💾 Erfolg: {count} NPB-Matchups in DuckDB gespeichert.")
+            
+    except Exception as e:
+        print(f"❌ Fehler beim Speichern von NPB in DuckDB: {e}")
+    finally:
+        con.close()
+
+@task(retries=2, retry_delay_seconds=60)
+def fetch_sumo_task():
+    """
+    Holt Sumo-Kämpfe der Top-Division (Makuuchi) von Sumo-API.com.
+    Berechnet automatisch das aktuelle Basho basierend auf Monat und Jahr.
+    """
+    print("🎎 Assessing Sumo schedule...")
+    now = datetime.now()
+    year = now.year
+    month = now.month
+
+    # Sumo-Turniere finden nur in ungeraden Monaten statt
+    if month % 2 == 0:
+        print(f"🏮 {now.strftime('%B')} ist kein Sumo-Monat. (Turniere: Jan, Mar, May, Jul, Sep, Nov)")
+        return pd.DataFrame()
+
+    # Konstruiere die Basho ID (z.B. 202603 für März 2026)
+    basho_id = f"{year}{month:02d}"
+    
+    # Da Bashos immer am 2. Sonntag starten, berechnen wir den Turniertag.
+    # Ein einfacherer Weg für die API: Wir fragen nach dem aktuellen Tag des Monats.
+    # Da Turniere meist um den 10. starten, mappen wir das Datum auf den Turniertag 1-15.
+    
+    # Profi-Tipp: Die API liefert unter /basho/{id} das Startdatum. 
+    # Für den Task nehmen wir hier eine robuste Abfrage:
+    try:
+        # Wir versuchen den 'Day' dynamisch zu bestimmen. 
+        # Falls du keine Lust auf komplexe Kalender-Logik hast, 
+        # ist es am sichersten, das Basho-Objekt direkt zu prüfen:
+        basho_info_res = requests.get(f"https://www.sumo-api.com/api/basho/{basho_id}")
+        if basho_info_res.status_code != 200:
+            return pd.DataFrame()
+            
+        start_date_str = basho_info_res.json().get('startDate') # z.B. "2026-03-08"
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+        
+        # Turniertag berechnen
+        day_diff = (now - start_date).days + 1
+        
+        if not (1 <= day_diff <= 15):
+            print(f"⏳ Basho {basho_id} geplant, aber heute ist nicht Turniertag 1-15 (Tag: {day_diff}).")
+            return pd.DataFrame()
+
+        print(f"⭐ Fetching Bouts for Basho {basho_id}, Day {day_diff}...")
+        response = requests.get(f"https://www.sumo-api.com/api/basho/{basho_id}/bouts/{day_diff}")
+        
+        if response.status_code != 200:
+            return pd.DataFrame()
+
+        data = response.json()
+        bouts = []
+        
+        for bout in data.get('bouts', []):
+            # Wir fokussieren uns auf die Top-Division
+            if bout.get('division') == 'Makuuchi':
+                bouts.append({
+                    'League': 'Sumo',
+                    'Away Team': bout.get('eastRikishiName'),
+                    'Home Team': bout.get('westRikishiName'),
+                    'Away Record': '0-0',
+                    'Home Record': '0-0',
+                    'Date': now.strftime('%Y-%m-%d'),
+                    'Time (CET)': '08:30', # Standardzeit für Makuuchi Bouts
+                    'End Time (CET)': '11:00',
+                    'Is Playoff': False
+                })
+        
+        df = pd.DataFrame(bouts)
+        print(f"✅ {len(df)} Sumo bouts loaded.")
+        return df
+
+    except Exception as e:
+        print(f"❌ Sumo-API Error: {e}")
+        return pd.DataFrame()
     
 @task(retries=3, retry_delay_seconds=60)
 def fetch_f1_task():
@@ -203,9 +370,36 @@ def fetch_f1_task():
         
         return pd.DataFrame(f1_events)
     except Exception as e:
-        print(f"❌ Fehler beim F1 Scraping: {e}")
+        print(f"❌ Error Scraping F1: {e}")
         return pd.DataFrame()
 
+@task(name="Save Sumo to DuckDB")
+def save_sumo_to_duckdb(df):
+    db_path = 'sports.duckdb'
+    con = duckdb.connect(db_path)
+    
+    if df is None or df.empty:
+        print("⚠️ Kein Sumo-Monat. Erstelle leere Tabelle für dbt...")
+        # Wir erstellen eine leere Tabelle mit dem richtigen Schema, 
+        # damit dbt nicht abstürzt
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS raw_sumo (
+                "League" VARCHAR,
+                "Away Team" VARCHAR,
+                "Home Team" VARCHAR,
+                "Away Record" VARCHAR,
+                "Home Record" VARCHAR,
+                "Date" VARCHAR,
+                "Time (CET)" VARCHAR,
+                "End Time (CET)" VARCHAR,
+                "Is Playoff" BOOLEAN
+            )
+        """)
+    else:
+        con.execute("CREATE OR REPLACE TABLE raw_sumo AS SELECT * FROM df")
+        print(f"💾 {len(df)} Sumo-Kämpfe gespeichert.")
+    
+    con.close()
 @task
 def save_f1_to_duckdb(df):
     if df.empty:
@@ -305,8 +499,6 @@ def dbt_transform_task():
         print(f"STDERR: {e.stderr}")
         raise e
 
-load_dotenv()  # Load environment variables from .env file
-
 @task
 def update_history_and_display_task():
 
@@ -384,10 +576,14 @@ def sports_flow():
     raw_df = scrape_task()
     ufc_df = fetch_ufc_task() 
     f1_df = fetch_f1_task()
+    sumo_df = fetch_sumo_task()
+    npb_df = fetch_npb_task()
     #saving  
     save_to_duckdb_task(raw_df)
     save_ufc_to_duckdb(ufc_df)
     save_f1_to_duckdb(f1_df)
+    save_sumo_to_duckdb(sumo_df)
+    save_npb_to_duckdb(npb_df)
     #transformation & display
     dbt_transform_task()
     update_history_and_display_task()

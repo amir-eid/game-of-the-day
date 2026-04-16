@@ -7,3 +7,5 @@ sources:
       - name: raw_games
       - name: raw_ufc
       - name: raw_f1
+      - name: raw_sumo
+      - name: raw_npb
