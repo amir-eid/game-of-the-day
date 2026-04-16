@@ -1,6 +1,6 @@
 # 🏆 Game of the Day: Sports Analytics Pipeline
 
-An automated data pipeline that scrapes daily sports schedules, ranks games based on a custom "watchability" algorithm, and sends the top picks directly to Discord.
+An automated data pipeline that scrapes daily sports schedules from different sources, ranks games based on a custom "watchability" algorithm, and sends the top picks directly to Discord.
 
 ## 🚀 Overview
 This project is designed to solve the "What should I watch today?" problem for sports fans. It handles everything from raw data extraction to final mobile notifications.
@@ -20,7 +20,7 @@ This project is designed to solve the "What should I watch today?" problem for s
 2.  **Load:** Ingests raw JSON/CSV data into a local `sports.duckdb` instance.
 3.  **Transform (dbt):**
     * Cleans team names and timestamps.
-    * Calculates a `total_watch_score` based on team rankings, rivalries, and betting spreads.
+    * Calculates a `total_watch_score` based on preferred leagues, sports, teams and rivalries.
     * Filters for "Favorites" and "Derby" matches.
 4.  **Notify:** Queries the final dbt models and pushes the Top 10 games to a Discord channel.
 
