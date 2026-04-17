@@ -681,8 +681,6 @@ def update_history_and_display_task():
 
 @task
 def notify_dashboard_sync():
-    # Wir berühren einfach den Zeitstempel der DB-Datei.
-    # Da Streamlit os.path.getmtime prüft, erkennt es die Änderung sofort.
     db_path = 'sports.duckdb'
     if os.path.exists(db_path):
         os.utime(db_path, None)
