@@ -111,38 +111,56 @@ try:
 
         with tab3:
             st.subheader("📅 League Season Tracker")
+    
+            # 1. Deine kuratierte Wissensdatenbank
             league_knowledge = {
                 "NBA": {"months": [10, 6], "status": "Regular Season", "event": "Playoffs starting April"},
+                "EuroLeague": {"months": [10, 5], "status": "Final Stretch", "event": "Final Four in May"},
+                "ABA": {"months": [9, 5], "status": "Regular Season", "event": "Playoffs in May"},
                 "MLB": {"months": [3, 11], "status": "Early Season", "event": "All-Star Game in July"},
                 "NHL": {"months": [10, 6], "status": "Regular Season", "event": "Stanley Cup Playoffs"},
+                "NPB": {"months": [3, 10], "status": "Regular Season", "event": "Japan Series in October"},
+                "UFC": {"months": [1, 12], "status": "Year-round", "event": "Weekly Fight Nights"},
+                "Boxing": {"months": [1, 12], "status": "Year-round", "event": "Major Title Fights"},
+                "F1": {"months": [3, 12], "status": "Season Active", "event": "Grand Prix Weekends"},
+                "Sumo": {"months": [1, 12], "status": "Odd Months", "event": "Jan, Mar, May, Jul, Sep, Nov"},
+                "NFL": {"months": [9, 2], "status": "Offseason", "event": "Training Camp in July"},
                 "ENG.1": {"months": [8, 5], "status": "Title Race", "event": "Season Finale in May"},
                 "GER.1": {"months": [8, 5], "status": "Final Stretch", "event": "Relegation Battle"},
                 "ESP.1": {"months": [8, 5], "status": "Regular Season", "event": "Title Race"},
-                "ITA.1": {"months": [8, 5], "status": "Regular Season", "event": "Champions League Race"},
-                "FRA.1": {"months": [8, 5], "status": "Regular Season", "event": "Title Contenders"},
-                "College Basketball": {"months": [11, 4], "status": "Regular Season", "event": "March Madness in March"},
-                "College Football": {"months": [8, 1], "status": "Regular Season", "event": "Bowl Games in December"},
-                "NFL": {"months": [9, 2], "status": "Regular Season", "event": "Super Bowl in February"}
             }
 
             current_month = datetime.now().month
             status_data = []
-            for liga in liga_filter:
-                if liga in league_knowledge:
-                    info = league_knowledge[liga]
-                    start, end = info["months"]
-                    is_active = (start <= current_month <= end) if start <= end else (current_month >= start or current_month <= end)
-                    status_data.append({
-                        "League": liga,
-                        "Status": "✅ Active" if is_active else "❌ Offseason",
-                        "Phase": info["status"] if is_active else "Resting",
-                        "Next Highlight": info["event"]
-                    })
 
-            if status_data:
-                st.table(pd.DataFrame(status_data))
-            else:
-                st.info("Please select leagues in the sidebar.")
+            # 2. Wir nutzen alle Ligen aus dem Dictionary als Basis
+            for liga, info in league_knowledge.items():
+                start, end = info["months"]
+        
+                # Logik für Saisonübergreifende Monate
+                if start <= end:
+                    is_active = (start <= current_month <= end)
+                else:
+                    is_active = (current_month >= start or current_month <= end)
+        
+                # Cross-Check: Haben wir heute wirklich Spiele in der DB?
+                has_games_today = liga in df['League'].values
+        
+                status_data.append({
+                    "League": liga,
+                    "Status": "✅ Active" if is_active else "❌ Offseason",
+                    "Today": "🏀 Scheduled" if has_games_today else "---",
+                    "Phase": info["status"] if is_active else "Resting",
+                    "Next Highlight": info["event"]
+                })
+
+            # 3. Anzeige als schicke Tabelle
+            tracker_df = pd.DataFrame(status_data)
+    
+            def highlight_today(val):
+                return 'color: #00ff00; font-weight: bold' if val == "🏀 Scheduled" else ''
+
+            st.table(tracker_df.style.map(highlight_today, subset=['Today']))
 
 except Exception as e:
     st.error(f"Critical Error: {e}")
