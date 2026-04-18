@@ -2,7 +2,6 @@ import streamlit as st
 import duckdb
 import pandas as pd
 import feedparser
-import requests
 import os  
 from datetime import datetime
 
@@ -10,17 +9,15 @@ st.set_page_config(page_title="Game of the Day Dashboard", layout="wide")
 
 st.title("🏆 Sports Watcher Dashboard")
 
-# --- DATA LOADING ---
 @st.cache_data(ttl=3600)
 def load_data():
     db_path = 'sports.duckdb'
-    # Falls die DB noch nicht existiert (erster Run), geben wir ein leeres DF zurück
+    #  Return empty df if database does not exist yet
     if not os.path.exists(db_path):
         return pd.DataFrame(), None
         
     last_modified = os.path.getmtime(db_path)
     con = duckdb.connect(db_path, read_only=True)
-    # Sicherstellen, dass die Tabelle existiert
     try:
         df = con.execute("SELECT * FROM fct_daily_schedule ORDER BY total_watch_score DESC").df()
     except:
@@ -32,21 +29,21 @@ try:
     df, last_update_time = load_data()
 
     if df.empty:
-        st.warning("No data found. Please run your Prefect pipeline first.")
+        st.warning("No data found. Run Prefect pipeline first.")
     else:
-        # 1. Sidebar mit Metadaten
+        # 1. Sidebar with league filters and last update time
         st.sidebar.header("Filter")
         liga_options = df['League'].unique()
         liga_filter = st.sidebar.multiselect("Choose League:", options=liga_options, default=liga_options)
         
-        # Zeitstempel anzeigen
+        # Show last update time in sidebar
         if last_update_time:
             readable_time = datetime.fromtimestamp(last_update_time).strftime('%Y-%m-%d %H:%M')
             st.sidebar.info(f"🔄 **Last Update:**\n{readable_time}")
 
         df_filtered = df[df['League'].isin(liga_filter)]
 
-        # --- TABS ERSTELLEN ---
+        # Create Dashboard Tabs
         tab1, tab2, tab3 = st.tabs(["🔥 Recommendations", "📰 Sports News", "📅 League Calendar"])
 
         with tab1:
@@ -66,32 +63,30 @@ try:
         with tab2:
             st.subheader("📰 Personalized Scouting Report")
     
-            # Wir nehmen die Top 3-5 Spiele für die News-Suche
-            top_games = df_filtered.head(5)
+            # Top 10 games based on watch score
+            top_games = df_filtered.head(10)
     
             if not top_games.empty:
-            # Wir loopen durch die Top-Spiele, um News pro Matchup anzuzeigen
+            # Loop through the top games and fetch news for each matchup
                 for _, game in top_games.iterrows():
                     matchup = f"{game['Away Team']} vs {game['Home Team']}"
                     with st.container():
                         st.markdown(f"#### News for: **{matchup}**")
                 
-                        # Wir bauen eine gezielte Google News URL für die Teams
-                        # hl=en-US für englische News, q=Suchbegriff
+                        # hl=en-US for english news, q=search query
                         query = f"{game['Away Team']} {game['Home Team']}".replace(" ", "+")
                         gn_url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
                 
                         try:
-                            # Wir nutzen feedparser direkt auf der Google News Suche
-                            # Das ist viel treffsicherer als allgemeine Feeds
+                            # Feedparser for parsing the RSS feed from Google News
                             gn_feed = feedparser.parse(gn_url)
                     
                             if gn_feed.entries:
-                                # Zeige die Top 2 relevantesten Artikel pro Matchup
+                                # Top 2 headlines per matchup
                                 cols = st.columns(2)
                                 for i, entry in enumerate(gn_feed.entries[:2]):
                                     with cols[i]:
-                                        # Zeitstempel hübsch machen
+                                        # Formating the publication date and source for better readability
                                         pub_date = entry.get('published', '')[:16]
                                         st.markdown(f"""
                                         <div style="border: 1px solid #444; padding: 10px; border-radius: 5px; height: 180px;">
@@ -112,9 +107,9 @@ try:
         with tab3:
             st.subheader("📅 League Season Tracker")
     
-            # 1. Deine kuratierte Wissensdatenbank
+            # Manual Calendar
             league_knowledge = {
-                "NBA": {"months": [10, 6], "status": "Regular Season", "event": "Playoffs starting April"},
+                "NBA": {"months": [10, 6], "status": "Playoffs", "event": "NBA Finals in June"},
                 "EuroLeague": {"months": [10, 5], "status": "Final Stretch", "event": "Final Four in May"},
                 "ABA": {"months": [9, 5], "status": "Regular Season", "event": "Playoffs in May"},
                 "MLB": {"months": [3, 11], "status": "Early Season", "event": "All-Star Game in July"},
@@ -133,17 +128,17 @@ try:
             current_month = datetime.now().month
             status_data = []
 
-            # 2. Wir nutzen alle Ligen aus dem Dictionary als Basis
+            # 2. Check each league against our knowledge base and today's schedule
             for liga, info in league_knowledge.items():
                 start, end = info["months"]
         
-                # Logik für Saisonübergreifende Monate
+                # Handle cases where the season spans across the year-end (e.g., NBA: Oct to June)
                 if start <= end:
                     is_active = (start <= current_month <= end)
                 else:
                     is_active = (current_month >= start or current_month <= end)
         
-                # Cross-Check: Haben wir heute wirklich Spiele in der DB?
+                # Check if there are games scheduled for this league today
                 has_games_today = liga in df['League'].values
         
                 status_data.append({
@@ -154,7 +149,7 @@ try:
                     "Next Highlight": info["event"]
                 })
 
-            # 3. Anzeige als schicke Tabelle
+            # 3. Display the status table with conditional formatting
             tracker_df = pd.DataFrame(status_data)
     
             def highlight_today(val):

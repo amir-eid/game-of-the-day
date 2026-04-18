@@ -67,50 +67,6 @@ DURATION_MAP = {
     'FIFA World Cup Qualifiers - CAF': 2.0, 'J1 League': 2.0, 'Copa Libertadores': 2.0, 'International Friendlies': 2.0
 }
 
-# ── Score weights ─────────────────────────────────────────────────────────────
-#LEAGUE_POINTS = {
- #   'NFL': 20, 'NBA': 18, 'MLB': 16, 'World Baseball Classic': 15, 'ESP.1': 14, 'NHL': 12, 'ENG.1': 10, 'College Basketball': 8,
-  #  'College Football': 6, 'GER.1': 4, 'FRA.1': 3, 'ITA.1': 2, 'UEFA Champions League': 2, 'UEFA Europa League': 1.5,
-   # 'UEFA Conference League': 1, 'FIFA World Cup': 25, 'UEFA European Championship': 20, 'FIBA World Cup': 5,
-    #'UEFA European Championship Qualifiers': 15, 'FA Cup': 1, 'Copa del Rey': 1, 'Eredivisie': 0.5, 'Portuguese Primeira Liga': 0.5,
-    #'Russian Premier League': 0.5, 'Austrian Bundesliga': 2, 'Turkish Süper Lig': 0.5, 'Olympic Basketball': 5,
-    #'Africa Cup of Nations': 2, 'Africa Cup of Nations Qualifiers': 2, 'Copa America': 0.5, 'Olympic Ice Hockey': 2,
-    #'UEFA Nations League': 0.5, 'Olympic Football Tournament': 0.5, 'FIFA World Cup Qualifiers - UEFA': 0.5,
-    #'FIFA World Cup Qualifiers - CAF': 0.5, 'J1 League': 0.5, 'Copa Libertadores': 0.5, 'International Friendlies': 0.25
-#}
-#FAVORITE_BONUS   = 30
-#PLAYOFF_BONUS    = 25
-#DERBY_BONUS      = 15
-#STREAK_BONUS     = 15
-#MAX_TABLE_POINTS = 10
-#TIME_CUTOFF      = '02:00'
-#TOP_N            = 5
-
-# ── Personal preferences ─────────────────────────────────────────────────────
-FAVORITE_TEAMS = [
-    'Miami Heat', 'Carolina Panthers',
-    'Illinois Fighting Illini', 'San Diego Padres', 'Valencia',
-    'Austria National Team', 'Egypt National Team', 'Poland National Team'
-]
-
-DERBIES = [
-    ('Los Angeles Lakers',  'Los Angeles Clippers'),
-    ('New York Knicks',     'Brooklyn Nets'),
-    ('Real Madrid',         'Barcelona'),
-    ('AC Milan',            'Internazionale'),
-    ('Bayern Munich',       'Borussia Dortmund'),
-    ('Arsenal',             'Tottenham Hotspur'),
-    ('Manchester United',   'Manchester City'),
-    ('Juventus',            'Inter Milan'),
-    ('River Plate',         'Boca Juniors'),
-    ('Red Bull Salzburg',   'Rapid Wien'),
-    ('Galatasaray',         'Fenerbahçe'),
-    ('Paris Saint-Germain', 'Olympique de Marseille'),
-    ('Ajax',                'Feyenoord'),
-    ('Benfica',             'Porto'),
-    ('Galatasaray',         'Besiktas'),
-    # Add more derbies here
-]
 
 def get_record(competitor):
     """Extract win-loss record from a competitor object."""
@@ -130,6 +86,7 @@ def fetch_league(sport, league_slug, league_name):
     url = f"https://site.api.espn.com/apis/site/v2/sports/{sport}/{league_slug}/scoreboard"
     params = {'dates': today}
 
+    # limit number of games for college leagues to avoid API overload (they often return too many games)
     if league_slug == 'mens-college-basketball':
         params.update({'groups': 50, 'limit': 350})
     elif league_slug == 'college-football':
@@ -155,7 +112,8 @@ def fetch_league(sport, league_slug, league_name):
             notes = comp.get('notes', [])
             is_playoff = any(
                 'playoff' in str(n.get('headline', '')).lower() or
-                'final' in str(n.get('headline', '')).lower()
+                'final' in str(n.get('headline', '')).lower() or
+                'game' in str(n.get('headline', '')).lower() 
                 for n in notes
             )
 
@@ -178,11 +136,13 @@ def fetch_league(sport, league_slug, league_name):
         print(f"Error fetching {league_name}: {e}")
         return pd.DataFrame()
 
+# load environment variables from .env file
 load_dotenv()
 
+#fetch other leagues which can not be easily scraped via ESPN API (e.g. NPB, Sumo, Boxing, Basketball) using SerpApi or other APIs
 @task(retries=3)
 def fetch_basketball_task():
-    """Holt EuroLeague und ABA Daten via SerpApi."""
+    """Get EuroLeague and ABA data via SerpApi."""
     print("🏀 Fetching Basketball (EuroLeague & ABA) via SerpApi...")
     api_key = os.getenv("SERPAPI_KEY")  
     
@@ -209,20 +169,20 @@ def fetch_basketball_task():
                     'Is Playoff': False
                 })
         except Exception as e:
-            print(f"⚠️ Error fetching {q}: {e}")
+            print(f"Error fetching {q}: {e}")
             
     return pd.DataFrame(all_baskets)
 
 @task(retries=3)
 def fetch_boxing_task():
-    """Holt nur relevante Boxkämpfe (Titelkämpfe oder Favoriten)."""
+    """Fetches only relevant boxing fights (title bouts or favorites)."""
     print("🥊 Fetching curated Boxing matches via SerpApi...")
     api_key = os.getenv("SERPAPI_KEY")
     
     # Hier deine Favoriten eintragen (Teile des Namens reichen)
     my_boxers = [
         'Canelo', 'Usyk', 'Fury', 'Joshua', 'Inoue', 'Crawford', 
-        'Davis', 'Haney', 'Bivol', 'Garcia', 'Loma'
+        'Davis', 'Haney', 'Bivol', 'Garcia', 'Loma', 'Wilder'
     ]
     
     params = {
@@ -238,25 +198,25 @@ def fetch_boxing_task():
         
         filtered_fights = []
         for match in all_matches:
-            # Wir extrahieren die Namen und die Event-Beschreibung
+            # Extract names and event notes for filtering
             name_str = " ".join([t.get('name', '') for t in match.get('teams', [])]).lower()
             event_note = match.get('status', '').lower() + match.get('league', '').lower()
-            
-            # Filter-Logik:
-            # 1. Ist einer deiner Boxer dabei?
+
+            # 1. Is it a fight involving one of my favorite boxers?
             is_favorite = any(boxer.lower() in name_str for boxer in my_boxers)
             
             # 2. Is it a title bout? (Searching for 'Title', 'WBC', 'WBA', 'IBF', 'WBO')
             is_title_bout = any(word in event_note or word in name_str 
                                 for word in ['title', 'wbc', 'wba', 'ibf', 'wbo', 'undisputed', 'world'])
 
+            # 3. Only include if it's either a favorite fight or a title bout
             if is_favorite or is_title_bout:
                 filtered_fights.append({
                     'League': 'Boxing',
                     'Away Team': match['teams'][0].get('name'),
                     'Home Team': match['teams'][1].get('name'),
                     'Away Record': 'Favorite' if is_favorite else 'Title Fight',
-                    'Home Record': match.get('venue', 'Pro Boxing'), # Wir nutzen Record-Feld für Infos
+                    'Home Record': match.get('venue', 'Pro Boxing'), 
                     'Date': datetime.now().strftime('%Y-%m-%d'),
                     'Time (CET)': '22:00',
                     'End Time (CET)': '01:00',
@@ -264,7 +224,7 @@ def fetch_boxing_task():
                 })
         
         df = pd.DataFrame(filtered_fights)
-        print(f"✅ {len(df)} relevante Boxkämpfe gefunden.")
+        print(f"✅ {len(df)} found relevant boxing fights.")
         return df
     except Exception as e:
         print(f"❌ Boxing Filter Error: {e}")
@@ -300,7 +260,7 @@ def save_boxing_to_duckdb(df):
 
 @task(retries=3, retry_delay_seconds=60)
 def fetch_npb_task():
-    """Holt ECHTE NPB-Daten via SerpApi (Google Search Results)."""
+    """Fetch real NPB matchups via SerpApi."""
     print("🛰️ Fetching live NPB matchups via SerpApi...")
     
     api_key = os.getenv("SERPAPI_KEY")
@@ -308,7 +268,7 @@ def fetch_npb_task():
         "engine": "google",
         "q": "NPB schedule today",
         "api_key": api_key,
-        "hl": "en", # Wir nutzen Englisch für konsistente Teamnamen
+        "hl": "en",
         "gl": "us"
     }
     
@@ -316,12 +276,12 @@ def fetch_npb_task():
         response = requests.get("https://serpapi.com/search", params=params, timeout=15)
         data = response.json()
         
-        # SerpApi extrahiert Sportergebnisse in 'sports_results'
+        # SerpApi extracts sports results in 'sports_results'
         sports_results = data.get("sports_results", {})
         games_list = sports_results.get("games", [])
         
-        # Falls Google keine 'games' Liste zeigt (oft bei Einzelspielen), 
-        # schauen wir in 'game_spotlight'
+        # If google does not return a 'games' list  
+        # we need to check if there is a 'game_spotlight'
         if not games_list and "game_spotlight" in sports_results:
             games_list = [sports_results["game_spotlight"]]
 
@@ -329,7 +289,6 @@ def fetch_npb_task():
         for game in games_list:
             teams = game.get("teams", [])
             if len(teams) >= 2:
-                # Wir mappen die Google-Struktur auf dein Dashboard-Schema
                 bouts.append({
                     'League': 'NPB',
                     'Away Team': teams[0].get("name"),
@@ -337,17 +296,17 @@ def fetch_npb_task():
                     'Away Record': teams[0].get("record", "0-0"),
                     'Home Record': teams[1].get("record", "0-0"),
                     'Date': datetime.now().strftime('%Y-%m-%d'),
-                    'Time (CET)': '11:00', # Standardzeit für Japan-Spiele
+                    'Time (CET)': '11:00', # standard time for NPB games
                     'End Time (CET)': '14:30',
                     'Is Playoff': False
                 })
         
         if not bouts:
-            print("📭 Keine aktuellen NPB-Spiele in den Google-Ergebnissen gefunden.")
+            print("No NPB matchups found for today.")
             return pd.DataFrame()
             
         df = pd.DataFrame(bouts)
-        print(f"✅ {len(df)} echte NPB Matchups erfolgreich geladen!")
+        print(f"✅ {len(df)} NPB matchups successfully fetched.")
         return df
 
     except Exception as e:
@@ -356,14 +315,13 @@ def fetch_npb_task():
 
 @task(name="Save NPB to DuckDB")
 def save_npb_to_duckdb(df):
-    """Speichert die NPB-Spiele in der DuckDB Tabelle 'raw_npb'."""
+    """Save NPB games in DuckDB table 'raw_npb'."""
     db_path = 'sports.duckdb'
     con = duckdb.connect(db_path)
     
     try:
         if df is None or df.empty:
-            print("⚠️ Keine NPB-Daten gefunden. Initialisiere leere Tabelle für dbt...")
-            # Erstellt das Schema, falls die Tabelle noch gar nicht existiert
+            print("No NPB data found. Initialize empty table for dbt...")
             con.execute("""
                 CREATE TABLE IF NOT EXISTS raw_npb (
                     "League" VARCHAR,
@@ -378,53 +336,45 @@ def save_npb_to_duckdb(df):
                 )
             """)
         else:
-            # Speichert die echten Daten und überschreibt die alte Tabelle
+            # Saves real data and overwrites old table
             con.execute("CREATE OR REPLACE TABLE raw_npb AS SELECT * FROM df")
             count = con.execute("SELECT count(*) FROM raw_npb").fetchone()[0]
-            print(f"💾 Erfolg: {count} NPB-Matchups in DuckDB gespeichert.")
+            print(f"Success: {count} NPB-Matchups saved in DuckDB.")
             
     except Exception as e:
-        print(f"❌ Fehler beim Speichern von NPB in DuckDB: {e}")
+        print(f"Error saving NPB games in DuckDB: {e}")
     finally:
         con.close()
 
 @task(retries=2, retry_delay_seconds=60)
 def fetch_sumo_task():
     """
-    Holt Sumo-Kämpfe der Top-Division (Makuuchi) von Sumo-API.com.
-    Berechnet automatisch das aktuelle Basho basierend auf Monat und Jahr.
+    Fetches sumo bouts of the top division (Makuuchi) from Sumo-API.com.
+    Automatically calculates the current basho based on month and year.
     """
     print("🎎 Assessing Sumo schedule...")
     now = datetime.now()
     year = now.year
     month = now.month
 
-    # Sumo-Turniere finden nur in ungeraden Monaten statt
+    # Sumo bashos are only held in odd months: Jan, Mar, May, Jul, Sep, Nov
     if month % 2 == 0:
-        print(f"🏮 {now.strftime('%B')} ist kein Sumo-Monat. (Turniere: Jan, Mar, May, Jul, Sep, Nov)")
+        print(f"🏮 {now.strftime('%B')} is not a sumo month (Tournaments: Jan, Mar, May, Jul, Sep, Nov)")
         return pd.DataFrame()
 
-    # Konstruiere die Basho ID (z.B. 202603 für März 2026)
+    # Construct Basho ID (e.g. 202603 for march 2026)
     basho_id = f"{year}{month:02d}"
     
-    # Da Bashos immer am 2. Sonntag starten, berechnen wir den Turniertag.
-    # Ein einfacherer Weg für die API: Wir fragen nach dem aktuellen Tag des Monats.
-    # Da Turniere meist um den 10. starten, mappen wir das Datum auf den Turniertag 1-15.
-    
-    # Profi-Tipp: Die API liefert unter /basho/{id} das Startdatum. 
-    # Für den Task nehmen wir hier eine robuste Abfrage:
     try:
-        # Wir versuchen den 'Day' dynamisch zu bestimmen. 
-        # Falls du keine Lust auf komplexe Kalender-Logik hast, 
-        # ist es am sichersten, das Basho-Objekt direkt zu prüfen:
+        
         basho_info_res = requests.get(f"https://www.sumo-api.com/api/basho/{basho_id}")
         if basho_info_res.status_code != 200:
             return pd.DataFrame()
             
-        start_date_str = basho_info_res.json().get('startDate') # z.B. "2026-03-08"
+        start_date_str = basho_info_res.json().get('startDate') 
         start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
         
-        # Turniertag berechnen
+        
         day_diff = (now - start_date).days + 1
         
         if not (1 <= day_diff <= 15):
@@ -441,7 +391,6 @@ def fetch_sumo_task():
         bouts = []
         
         for bout in data.get('bouts', []):
-            # Wir fokussieren uns auf die Top-Division
             if bout.get('division') == 'Makuuchi':
                 bouts.append({
                     'League': 'Sumo',
@@ -450,7 +399,7 @@ def fetch_sumo_task():
                     'Away Record': '0-0',
                     'Home Record': '0-0',
                     'Date': now.strftime('%Y-%m-%d'),
-                    'Time (CET)': '08:30', # Standardzeit für Makuuchi Bouts
+                    'Time (CET)': '08:30', # Standard time for Makuuchi Bouts
                     'End Time (CET)': '11:00',
                     'Is Playoff': False
                 })
@@ -466,7 +415,7 @@ def fetch_sumo_task():
 @task(retries=3, retry_delay_seconds=60)
 def fetch_f1_task():
     """Scrape today's F1 events from the ESPN-API."""
-    print("🏎️ Scraping F1 events...")
+    print("Scraping F1 events...")
     url = "http://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard"
     
     try:
@@ -477,7 +426,6 @@ def fetch_f1_task():
         for event in data.get('events', []):
             dt_cet = pd.to_datetime(event.get('date')).tz_convert('Europe/Vienna')
             
-            # Wir nehmen den Namen des Grand Prix und die spezifische Session
             f1_events.append({
                 'Event_Name': event.get('name'),
                 'Circuit': event.get('venue', {}).get('fullName', 'Unknown Circuit'),
@@ -497,9 +445,8 @@ def save_sumo_to_duckdb(df):
     con = duckdb.connect(db_path)
     
     if df is None or df.empty:
-        print("⚠️ Kein Sumo-Monat. Erstelle leere Tabelle für dbt...")
-        # Wir erstellen eine leere Tabelle mit dem richtigen Schema, 
-        # damit dbt nicht abstürzt
+        print("No sumo month. Initialize empty table for dbt...")
+
         con.execute("""
             CREATE TABLE IF NOT EXISTS raw_sumo (
                 "League" VARCHAR,
@@ -515,7 +462,7 @@ def save_sumo_to_duckdb(df):
         """)
     else:
         con.execute("CREATE OR REPLACE TABLE raw_sumo AS SELECT * FROM df")
-        print(f"💾 {len(df)} Sumo-Kämpfe gespeichert.")
+        print(f"{len(df)} Sumo Bashos saved in DuckDB.")
     
     con.close()
 @task
@@ -530,7 +477,7 @@ def save_f1_to_duckdb(df):
 @task(retries=3, retry_delay_seconds=60)
 def fetch_ufc_task():
     """Fetch today's UFC fights from the ESPN-API."""
-    print("🥊 Scraping UFC events...")
+    print("Scraping UFC events...")
     url = "http://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard"
     
     try:
@@ -539,13 +486,11 @@ def fetch_ufc_task():
         all_fights = []
         
         for event in data.get('events', []):
-            # ESPN Datum konvertieren
             dt_cet = pd.to_datetime(event.get('date')).tz_convert('Europe/Vienna')
             
             for comp in event.get('competitions', []):
                 fighters = []
                 for competitor in comp.get('competitors', []):
-                    # Fallback Logik: Erst athlete, dann team
                     name = "Unbekannt"
                     if 'athlete' in competitor:
                         name = competitor['athlete'].get('displayName')
@@ -565,7 +510,7 @@ def fetch_ufc_task():
         
         return pd.DataFrame(all_fights)
     except Exception as e:
-        print(f"❌ Fehler beim UFC Scraping: {e}")
+        print(f"Error scraping UFC data {e}")
         return pd.DataFrame()
 
 @task
@@ -612,14 +557,13 @@ def dbt_transform_task():
         )
         print(result.stdout) 
     except subprocess.CalledProcessError as e:
-        print(f"❌ dbt failed with return code {e.returncode}")
+        print(f"dbt failed with return code {e.returncode}")
         print(f"STDOUT: {e.stdout}")
         print(f"STDERR: {e.stderr}")
         raise e
 
 @task
 def update_history_and_display_task():
-
 
     print("\n🏆 TOP 10 GAMES FOR TODAY 🏆")
     print("="*60)
@@ -657,7 +601,7 @@ def update_history_and_display_task():
     print(df.to_string(index=False))
     print("="*60)
 
-    #send to discord
+    # Send to discord
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
 
     if not webhook_url:
@@ -684,7 +628,7 @@ def notify_dashboard_sync():
     db_path = 'sports.duckdb'
     if os.path.exists(db_path):
         os.utime(db_path, None)
-        print("🔔 Dashboard notified: New dbt data detected.")
+        print("Dashboard notified: New dbt data detected.")
 
 @flow(name="Sports Data Pipeline", log_prints=True)
 def sports_flow():
