@@ -627,13 +627,13 @@ def dbt_transform_task():
 
 @task
 def update_history_and_display_task():
-
     vienna_tz = pytz.timezone('Europe/Vienna')
     today_vienna = datetime.now(vienna_tz).strftime('%Y-%m-%d')
 
-    print("\n🏆 TOP 10 GAMES FOR TODAY 🏆")
+    print("\n🏆 UPDATING HISTORY & NOTIFYING DISCORD 🏆")
     
     with engine.begin() as conn:
+        # 1. History in Supabase aktualisieren (wichtig für spätere Analysen!)
         conn.execute(text(f"""
             INSERT INTO watch_history (date, league, matchup, score, time, watched)
             SELECT 
@@ -647,13 +647,10 @@ def update_history_and_display_task():
             ON CONFLICT (date, matchup) DO NOTHING
         """))
 
-        # 2. Top 10 for terminal
-
+        # 2. Wir ziehen die Top 10 trotzdem kurz für die Terminal-Logs (gut zum Debuggen bei GitHub)
         query = f"""
             SELECT 
                 total_watch_score::INT as score,
-                tags,
-                '{today_vienna}' as date,         
                 "League" as league,
                 "Away Team" || ' @ ' || "Home Team" as matchup,
                 "Time (CET)" as time
@@ -664,22 +661,25 @@ def update_history_and_display_task():
         """
         df = pd.read_sql(query, conn)
 
+    # Das erscheint nur in deinen GitHub/Terminal Logs
     print(df.to_string(index=False))
     print("="*60)
 
-    # Send to discord
+    # 3. Neue, schlanke Discord Benachrichtigung
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+    dashboard_url = "https://game-of-the-day-nqjhazo6peteukrajbpkhw.streamlit.app/"
 
     if not webhook_url:
-        print("No Discord Webhook URL found in .env file!")
+        print("No Discord Webhook URL found!")
         return
 
-    # Format a nice message for your phone
-    discord_msg = "🏁 **DAILY TOP PICKS** 🏁\n"
-    for _, row in df.head(10).iterrows(): 
-        star = "⭐" if "Favorite" in str(row['tags']) else "🔹"
-        discord_msg += f"{star} **{row['score']} pts** | {row['league']}\n"
-        discord_msg += f"> {row['matchup']} at {row['time']}\n\n"
+    # Nur noch ein kurzer Teaser mit Link
+    discord_msg = (
+        "🚀 **Der neue Spielplan ist live!**\n\n"
+        f"Heute warten **{len(df)} Top-Spiele** auf dich.\n"
+        "Schau dir die Details im Dashboard an:\n"
+        f"👉 {dashboard_url}"
+    )
 
     try:
         requests.post(webhook_url, json={"content": discord_msg})
