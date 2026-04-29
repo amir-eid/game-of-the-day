@@ -1,61 +1,149 @@
 import streamlit as st
 import pandas as pd
+import feedparser
 from sqlalchemy import create_engine
-import os
+import os  
+from datetime import datetime
 
-# Seite konfigurieren
-st.set_page_config(page_title="Sports Watch Score", layout="wide")
+# --- KONFIGURATION ---
+st.set_page_config(page_title="Sports Watcher Dashboard", layout="wide")
+st.title("🏆 Sports Watcher Dashboard")
 
-st.title("🏆 Game of the Day Dashboard")
-st.markdown("Finde die besten Spiele für heute und morgen.")
-
-# Verbindung zu Supabase (Postgres)
-def get_data():
-    # In Streamlit Cloud nutzen wir st.secrets
+# --- DATEN LADEN (VON SUPABASE) ---
+@st.cache_data(ttl=3600)
+def load_data():
+    if "SUPABASE_DB_URL" not in st.secrets:
+        st.error("Bitte SUPABASE_DB_URL in den Streamlit Secrets hinterlegen!")
+        return pd.DataFrame()
+        
     db_url = st.secrets["SUPABASE_DB_URL"]
     engine = create_engine(db_url)
     
-    query = """
-        SELECT 
-            total_watch_score as score,
-            "League",
-            "Away Team" || ' @ ' || "Home Team" as Matchup,
-            "Date",
-            "Time (CET)",
-            tags
-        FROM fct_daily_schedule
-        ORDER BY total_watch_score DESC
-    """
-    return pd.read_sql(query, engine)
+    try:
+        query = "SELECT * FROM fct_daily_schedule ORDER BY total_watch_score DESC"
+        df = pd.read_sql(query, engine)
+        return df
+    except Exception as e:
+        st.error(f"Fehler beim Laden der Daten: {e}")
+        return pd.DataFrame()
 
+# --- HAUPT-LOGIK ---
 try:
-    df = get_data()
+    df = load_data()
 
-    # --- Sidebar Filter ---
-    st.sidebar.header("Filter")
-    leagues = st.sidebar.multiselect("Ligen wählen", options=df["League"].unique(), default=df["League"].unique())
-    min_score = st.sidebar.slider("Minimum Watch Score", 0, 100, 40)
+    if df.empty:
+        st.warning("Keine Daten in der Datenbank gefunden. Läuft die GitHub Action?")
+    else:
+        # 1. Sidebar Filter
+        st.sidebar.header("Filter")
+        liga_options = sorted(df['League'].unique())
+        liga_filter = st.sidebar.multiselect("Choose League:", options=liga_options, default=liga_options)
+        st.sidebar.info("🔄 **Status:** Live-Verbindung zu Supabase")
 
-    # Daten filtern
-    filtered_df = df[(df["League"].isin(leagues)) & (df["score"] >= min_score)]
+        df_filtered = df[df['League'].isin(liga_filter)]
 
-    # --- Hauptanzeige ---
-    col1, col2 = st.columns([2, 1])
+        # 2. Dashboard Tabs
+        tab1, tab2, tab3 = st.tabs(["🔥 Recommendations", "📰 Sports News", "📅 League Calendar"])
 
-    with col1:
-        st.subheader("Top Matchups")
-        # Tabelle mit farblicher Markierung (Heatmap-Style)
-        st.dataframe(
-            filtered_df.style.background_gradient(subset=['score'], cmap='Greens'),
-            use_container_width=True,
-            hide_index=True
-        )
+        with tab1:
+            m1, m2 = st.columns(2)
+            m1.metric("Games Today", len(df_filtered))
+            max_score = int(df_filtered['total_watch_score'].max()) if not df_filtered.empty else 0
+            m2.metric("Highest Score", f"{max_score}")
 
-    with col2:
-        st.subheader("Stats")
-        st.metric("Spiele gefunden", len(filtered_df))
-        if not filtered_df.empty:
-            st.metric("Höchster Score", f"{filtered_df['score'].max()} pts")
+            def highlight_scores(val):
+                return 'background-color: #2ecc71; color: black; font-weight: bold' if val >= 50 else ''
+
+            st.subheader("Today's Top Picks")
+            st.dataframe(
+                df_filtered.style.map(highlight_scores, subset=['total_watch_score'])
+                .format(subset=['total_watch_score'], precision=0), 
+                use_container_width=True
+            )
+
+        with tab2:
+            st.subheader("📰 Personalized Scouting Report")
+            top_games = df_filtered.head(10)
+
+            if not top_games.empty:
+                for _, game in top_games.iterrows():
+                    away = game.get('Away Team', 'Team A')
+                    home = game.get('Home Team', 'Team B')
+                    matchup = f"{away} vs {home}"
+                    
+                    with st.container():
+                        st.markdown(f"#### News for: **{matchup}**")
+                        query_str = f"{away} {home}".replace(" ", "+")
+                        gn_url = f"https://news.google.com/rss/search?q={query_str}&hl=en-US&gl=US&ceid=US:en"
+                        
+                        try:
+                            gn_feed = feedparser.parse(gn_url)
+                            if gn_feed.entries:
+                                cols = st.columns(2)
+                                for i, entry in enumerate(gn_feed.entries[:2]):
+                                    with cols[i]:
+                                        pub_date = entry.get('published', '')[:16]
+                                        st.markdown(f"""
+                                        <div style="border: 1px solid #444; padding: 10px; border-radius: 5px; height: 180px; overflow: hidden;">
+                                            <p style="font-size: 0.8rem; color: #888;">{entry.source.get('title', 'News')} | {pub_date}</p>
+                                            <h6 style="margin-top: 0;">{entry.title}</h6>
+                                            <a href="{entry.link}" target="_blank">Read Story</a>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                            else:
+                                st.write("No specific headlines found.")
+                        except:
+                            st.error(f"Could not load news for {matchup}")
+                        st.divider()
+            else:
+                st.info("No games selected.")
+
+        with tab3:
+            st.subheader("📅 League Season Tracker")
+            
+            league_knowledge = {
+                "NBA": {"months": [10, 6], "status": "Playoffs", "event": "NBA Finals in June"},
+                "EuroLeague": {"months": [10, 5], "status": "Final Stretch", "event": "Final Four in May"},
+                "ABA": {"months": [9, 5], "status": "Regular Season", "event": "Playoffs in May"},
+                "MLB": {"months": [3, 11], "status": "Early Season", "event": "All-Star Game in July"},
+                "NHL": {"months": [10, 6], "status": "Regular Season", "event": "Stanley Cup Playoffs"},
+                "NPB": {"months": [3, 10], "status": "Regular Season", "event": "Japan Series in October"},
+                "UFC": {"months": [1, 12], "status": "Year-round", "event": "Weekly Fight Nights"},
+                "Boxing": {"months": [1, 12], "status": "Year-round", "event": "Major Title Fights"},
+                "F1": {"months": [3, 12], "status": "Season Active", "event": "Grand Prix Weekends"},
+                "Sumo": {"months": [1, 12], "status": "Odd Months", "event": "Jan, Mar, May, Jul, Sep, Nov"},
+                "NFL": {"months": [9, 2], "status": "Offseason", "event": "Training Camp in July"},
+                "ENG.1": {"months": [8, 5], "status": "Title Race", "event": "Season Finale in May"},
+                "GER.1": {"months": [8, 5], "status": "Final Stretch", "event": "Relegation Battle"},
+                "ESP.1": {"months": [8, 5], "status": "Regular Season", "event": "Title Race"},
+            }
+
+            current_month = datetime.now().month
+            status_data = []
+
+            for liga, info in league_knowledge.items():
+                start, end = info["months"]
+                if start <= end:
+                    is_active = (start <= current_month <= end)
+                else:
+                    is_active = (current_month >= start or current_month <= end)
+            
+                has_games_today = liga in df['League'].values
+            
+                status_data.append({
+                    "League": liga,
+                    "Status": "✅ Active" if is_active else "❌ Offseason",
+                    "Today": "🏀 Scheduled" if has_games_today else "---",
+                    "Phase": info["status"] if is_active else "Resting",
+                    "Next Highlight": info["event"]
+                })
+
+            tracker_df = pd.DataFrame(status_data)
+        
+            def highlight_today(val):
+                return 'color: #00ff00; font-weight: bold' if val == "🏀 Scheduled" else ''
+
+            st.table(tracker_df.style.map(highlight_today, subset=['Today']))
 
 except Exception as e:
-    st.error(f"Verbindung fehlgeschlagen: {e}")
+    st.error(f"Critical Error: {e}")
