@@ -1,8 +1,0 @@
-sports_transform:
-  outputs:
-    dev:
-      type: duckdb
-      path: /app/sports.duckdb
-      extensions:
-        - httpfs
-  target: dev

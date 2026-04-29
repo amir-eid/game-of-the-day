@@ -11,6 +11,8 @@ services:
       - DBT_PROFILES_DIR=/app
       - PREFECT_API_DATABASE_CONNECTION_TIMEOUT=60
       - PREFECT_CLIENT_TIMEOUT=60
+      - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////tmp/prefect.db
+      - PREFECT_SERVER_STARTUP_TIMEOUT_SECONDS=60
     working_dir: /app
     command: >
       sh -c "streamlit run dashboard.py --server.port 8501 --server.address 0.0.0.0 &

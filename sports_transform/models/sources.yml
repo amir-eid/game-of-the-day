@@ -2,7 +2,8 @@ version: 2
 
 sources:
   - name: external_data
-    schema: main
+    database: postgres
+    schema: public
     tables:
       - name: raw_games
       - name: raw_ufc

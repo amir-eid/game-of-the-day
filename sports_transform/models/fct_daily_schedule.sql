@@ -1,3 +1,8 @@
+{{ config(
+    materialized='table'
+) }}
+
+
 with raw_games_source as (
     select
         "League",
@@ -12,7 +17,7 @@ with raw_games_source as (
     from {{ source('external_data', 'raw_games') }}
 ),
 
-    raw_ufc_source as (
+   raw_ufc_source as (
         select
             'UFC' as "League",
             "Fighter_B" as "Away Team",
@@ -21,10 +26,10 @@ with raw_games_source as (
             '0-0' as "Home Record",
             "Date",
             "Time_CET" as "Time (CET)",
-            strftime(date_add(CAST("Date" || ' ' || "Time_CET" AS TIMESTAMP), interval 30 minute), '%H:%M') as "End Time (CET)",
+            TO_CHAR((CAST("Date" || ' ' || "Time_CET" AS TIMESTAMP) + interval '30 minutes'), 'HH24:MI') as "End Time (CET)",
             false as "Is Playoff"
         from {{ source('external_data', 'raw_ufc') }}
-    ),
+),
 
     raw_f1_source as (
     select 
@@ -35,7 +40,7 @@ with raw_games_source as (
         'N/A' as "Home Record",
         "Date",
         "Time_CET" as "Time (CET)",
-        strftime(date_add(CAST("Date" || ' ' || "Time_CET" AS TIMESTAMP), interval 2 hour), '%H:%M') as "End Time (CET)",
+        TO_CHAR((CAST("Date" || ' ' || "Time_CET" AS TIMESTAMP) + interval '2 hours'), 'HH24:MI') as "End Time (CET)",
         false as "Is Playoff"
     from {{ source('external_data', 'raw_f1') }}
 ),
@@ -72,7 +77,6 @@ base as (
 logic as (
     select
         *,
-        -- 1. FAVORITE LOGIC
         case 
             when "Home Team" in ('Miami Heat', 'Carolina Panthers', 'Valencia', 'Illinois Fighting Illini', 'San Diego Padres',
                                  'Austria National Team', 'Egypt National Team', 'Poland National Team') then 1
@@ -109,19 +113,39 @@ logic as (
             when ("Home Team" = 'Lazio' and "Away Team" = 'AS Roma') then 1
             when ("Home Team" = 'Fenerbahçe' and "Away Team" = 'Galatasaray') then 1
             when ("Home Team" = 'Galatasaray' and "Away Team" = 'Fenerbahçe') then 1
+            when ("Home Team" = 'Porto' and "Away Team" = 'Benfica') then 1
+            when ("Home Team" = 'Benfica' and "Away Team" = 'Porto') then 1
+            when ("Home Team" = 'Ajax' and "Away Team" = 'Feyenoord') then 1
+            when ("Home Team" = 'Feyenoord' and "Away Team" = 'Ajax') then 1
+            when ("Home Team" = 'Borussia Dortmund' and "Away Team" = 'Schalke 04') then 1
+            when ("Home Team" = 'Schalke 04' and "Away Team" = 'Borussia Dortmund') then 1
+            when ("Home Team" = 'AS Saint-Étienne' and "Away Team" = 'Olympique Lyonnais') then 1
+            when ("Home Team" = 'Olympique Lyonnais' and "Away Team" = 'AS Saint-Étienne') then 1
+            when ("Home Team" = 'Hamburger SV' and "Away Team" = 'Werder Bremen') then 1
+            when ("Home Team" = 'Werder Bremen' and "Away Team" = 'Hamburger SV') then 1
+            when ("Home Team" = 'Partizan' and "Away Team" = 'Crvena Zvezda') then 1
+            when ("Home Team" = 'Crvena Zvezda' and "Away Team" = 'Partizan') then 1
             -- Add more from your Python DERBIES list as needed
             else 0 
         end as is_derby_game,
 
         -- 3. WIN PERCENTAGE LOGIC (Parsing "10-5" style records)
         -- This looks complex but it just handles the math of Wins / (Wins + Losses)
-        coalesce(try_cast(split_part("Home Record", '-', 1) as float) / 
-            NULLIF((try_cast(split_part("Home Record", '-', 1) as float) + try_cast(split_part("Home Record", '-', 2) as float)), 0), 0) 
-        as home_win_pct,
+        coalesce(
+            case 
+                when "Home Record" LIKE '%-%' and "Home Record" NOT LIKE '%N/A%' 
+                then (split_part("Home Record", '-', 1)::float) / 
+                     NULLIF(((split_part("Home Record", '-', 1)::float) + (split_part("Home Record", '-', 2)::float)), 0)
+                else 0 
+            end, 0) as home_win_pct,
         
-        coalesce(try_cast(split_part("Away Record", '-', 1) as float) / 
-            NULLIF((try_cast(split_part("Away Record", '-', 1) as float) + try_cast(split_part("Away Record", '-', 2) as float)), 0), 0) 
-        as away_win_pct,
+        coalesce(
+            case 
+                when "Away Record" LIKE '%-%' and "Away Record" NOT LIKE '%N/A%' 
+                then (split_part("Away Record", '-', 1)::float) / 
+                     NULLIF(((split_part("Away Record", '-', 1)::float) + (split_part("Away Record", '-', 2)::float)), 0)
+                else 0 
+            end, 0) as away_win_pct
     from base
 ),
 
@@ -165,12 +189,20 @@ calculated_scores as (
 )
 
 select
-    "League", "Away Team", "Home Team", "Time (CET)", "End Time (CET)", "Is Playoff",
+    "League", "Away Team", "Home Team", "Date", "Time (CET)", "End Time (CET)", "Is Playoff",
     (league_pts + favorite_pts + playoff_pts + derby_pts + record_pts + time_pts) as total_watch_score,
     -- Simple tagging
     case when is_favorite = 1 then '⭐ Favorite ' else '' end || 
     case when is_derby_game = 1 then '🔥 DERBY ' else '' end ||
     case when "Is Playoff" = true then '🏆 Playoff ' else '' end as tags
 from calculated_scores
-where ("Time (CET)" < '02:00' or "Time (CET)" > '10:00')
+where 
+    "Date" = TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'EUROPE/VIENNA', 'YYYY-MM-DD')
+    or
+    (
+        "Date" = TO_CHAR((CURRENT_TIMESTAMP AT TIME ZONE 'EUROPE/VIENNA' + interval '1 day'), 'YYYY-MM-DD') 
+        and "Time (CET)" < '05:00'
+    )
+     and
+    ("Time (CET)" < '02:00' or "Time (CET)" > '10:00')
 order by total_watch_score desc

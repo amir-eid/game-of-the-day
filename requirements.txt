@@ -1,9 +1,13 @@
 requests
 pandas
 duckdb
-dbt-duckdb
+dbt-postgres
 streamlit
 prefect
 feedparser
+pytz
 plotly
 schedule
+psycopg2-binary
+sqlalchemy
+python-dotenv

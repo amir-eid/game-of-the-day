@@ -7,6 +7,9 @@ from datetime import datetime
 import pandas as pd
 import subprocess
 import schedule, time
+from sqlalchemy import create_engine, text
+import pytz
+import sys
 
 # ── Leagues to fetch ──────────────────────────────────────────────────────────
 LEAGUES = [
@@ -80,9 +83,10 @@ def calculate_end_time(dt, league):
     return (dt + pd.Timedelta(hours=hours)).strftime('%H:%M')
 
 
-def fetch_league(sport, league_slug, league_name):
+def fetch_league(sport, league_slug, league_name, date=None):
     """Fetch today's games for a single league from ESPN API."""
-    today = datetime.now().strftime('%Y%m%d')
+    tz = pytz.timezone('Europe/Vienna')
+    today = datetime.now(tz).strftime('%Y%m%d')
     url = f"https://site.api.espn.com/apis/site/v2/sports/{sport}/{league_slug}/scoreboard"
     params = {'dates': today}
 
@@ -110,12 +114,19 @@ def fetch_league(sport, league_slug, league_name):
 
             # Check if game is a playoff/finals game
             notes = comp.get('notes', [])
+            headline = str(notes[0].get('headline', '')).lower() if notes else ""
             is_playoff = any(
-                'playoff' in str(n.get('headline', '')).lower() or
-                'final' in str(n.get('headline', '')).lower() or
-                'game' in str(n.get('headline', '')).lower() 
+                keyword in str(n.get('headline', '')).lower() 
                 for n in notes
+                for keyword in ['playoff', 'postseason', 'championship', 'final four', 'world series']
             )
+
+            if not is_playoff and league_name in ['NBA', 'NHL']:
+                if 'game' in headline:
+                    is_playoff = True
+            
+            if league_name == 'MLB':
+                is_playoff = any(k in headline for k in ['world series', 'postseason'])
 
             games.append({
                 'Away Team':      away['team']['displayName'],
@@ -138,6 +149,45 @@ def fetch_league(sport, league_slug, league_name):
 
 # load environment variables from .env file
 load_dotenv()
+DB_URL = os.getenv("SUPABASE_DB_URL")
+engine = create_engine(DB_URL)
+
+def generic_save_to_supabase(df, table_name):
+    """Saves data in Supabase"""
+    if df is not None and not df.empty:
+        df.to_sql(table_name, engine, if_exists='replace', index=False)
+        print(f"{len(df)} rows saved in {table_name}.")
+    else:
+        print(f"No data for{table_name}, skip saving.")
+
+
+@task(name="Save Basketball to Supabase")
+def save_basketball_to_supabase(df):
+    generic_save_to_supabase(df, "raw_eurobasket")
+
+@task(name="Save Boxing to Supabase")
+def save_boxing_to_supabase(df):
+    generic_save_to_supabase(df, "raw_boxing")
+
+@task(name="Save NPB to Supabase")
+def save_npb_to_supabase(df):
+    generic_save_to_supabase(df, "raw_npb")
+
+@task(name="Save Sumo to Supabase")
+def save_sumo_to_supabase(df):
+    generic_save_to_supabase(df, "raw_sumo")
+
+@task
+def save_f1_to_supabase(df):
+    generic_save_to_supabase(df, "raw_f1")
+
+@task
+def save_ufc_to_supabase(df):
+    generic_save_to_supabase(df, "raw_ufc")
+
+@task
+def save_to_supabase_task(df):
+    generic_save_to_supabase(df, "raw_games")
 
 #fetch other leagues which can not be easily scraped via ESPN API (e.g. NPB, Sumo, Boxing, Basketball) using SerpApi or other APIs
 @task(retries=3)
@@ -230,35 +280,35 @@ def fetch_boxing_task():
         print(f"❌ Boxing Filter Error: {e}")
         return pd.DataFrame()
     
-def generic_save_to_duckdb(df, table_name):
-    con = duckdb.connect('sports.duckdb')
-    if df is None or df.empty:
-        con.execute(f"""
-            CREATE TABLE IF NOT EXISTS {table_name} (
-                "League" VARCHAR,
-                "Away Team" VARCHAR,
-                "Home Team" VARCHAR, 
-                "Away Record" VARCHAR,
-                "Home Record" VARCHAR, 
-                Date VARCHAR,
-                "Time (CET)" VARCHAR,
-                "End Time (CET)" VARCHAR, 
-                "Is Playoff" BOOLEAN
-            )
-        """)
-    else:
-        con.execute(f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM df")
-    con.close()
+#def generic_save_to_duckdb(df, table_name):
+ #   con = duckdb.connect('sports.duckdb')
+  #  if df is None or df.empty:
+   #     con.execute(f"""
+    #        CREATE TABLE IF NOT EXISTS {table_name} (
+     #           "League" VARCHAR,
+      #          "Away Team" VARCHAR,
+       #         "Home Team" VARCHAR, 
+        #        "Away Record" VARCHAR,
+         #       "Home Record" VARCHAR, 
+          #      Date VARCHAR,
+           #     "Time (CET)" VARCHAR,
+            #    "End Time (CET)" VARCHAR, 
+             #   "Is Playoff" BOOLEAN
+            #)
+        #""")
+    #else:
+     #   con.execute(f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM df")
+    #con.close()
 
-@task(name="Save Basketball to DuckDB")
-def save_basketball_to_duckdb(df):
-    generic_save_to_duckdb(df, "raw_eurobasket")
+#@task(name="Save Basketball to DuckDB")
+#def save_basketball_to_duckdb(df):
+ #   generic_save_to_duckdb(df, "raw_eurobasket")
 
-@task(name="Save Boxing to DuckDB")
-def save_boxing_to_duckdb(df):
-    generic_save_to_duckdb(df, "raw_boxing")
+#@task(name="Save Boxing to DuckDB")
+#def save_boxing_to_duckdb(df):
+ #   generic_save_to_duckdb(df, "raw_boxing")
 
-@task(retries=3, retry_delay_seconds=60)
+#@task(retries=3, retry_delay_seconds=60)
 def fetch_npb_task():
     """Fetch real NPB matchups via SerpApi."""
     print("🛰️ Fetching live NPB matchups via SerpApi...")
@@ -313,38 +363,38 @@ def fetch_npb_task():
         print(f"❌ SerpApi Error: {e}")
         return pd.DataFrame()
 
-@task(name="Save NPB to DuckDB")
-def save_npb_to_duckdb(df):
-    """Save NPB games in DuckDB table 'raw_npb'."""
-    db_path = 'sports.duckdb'
-    con = duckdb.connect(db_path)
+#@task(name="Save NPB to DuckDB")
+#def save_npb_to_duckdb(df):
+ #   """Save NPB games in DuckDB table 'raw_npb'."""
+  #  db_path = 'sports.duckdb'
+   # con = duckdb.connect(db_path)
     
-    try:
-        if df is None or df.empty:
-            print("No NPB data found. Initialize empty table for dbt...")
-            con.execute("""
-                CREATE TABLE IF NOT EXISTS raw_npb (
-                    "League" VARCHAR,
-                    "Away Team" VARCHAR,
-                    "Home Team" VARCHAR,
-                    "Away Record" VARCHAR,
-                    "Home Record" VARCHAR,
-                    "Date" VARCHAR,
-                    "Time (CET)" VARCHAR,
-                    "End Time (CET)" VARCHAR,
-                    "Is Playoff" BOOLEAN
-                )
-            """)
-        else:
+    #try:
+     #   if df is None or df.empty:
+      #      print("No NPB data found. Initialize empty table for dbt...")
+       #     con.execute("""
+        #        CREATE TABLE IF NOT EXISTS raw_npb (
+         #           "League" VARCHAR,
+          #          "Away Team" VARCHAR,
+           #         "Home Team" VARCHAR,
+            #        "Away Record" VARCHAR,
+             #       "Home Record" VARCHAR,
+              #      "Date" VARCHAR,
+               #     "Time (CET)" VARCHAR,
+                #    "End Time (CET)" VARCHAR,
+                 #   "Is Playoff" BOOLEAN
+                #)
+            #""")
+        #else:
             # Saves real data and overwrites old table
-            con.execute("CREATE OR REPLACE TABLE raw_npb AS SELECT * FROM df")
-            count = con.execute("SELECT count(*) FROM raw_npb").fetchone()[0]
-            print(f"Success: {count} NPB-Matchups saved in DuckDB.")
+         #   con.execute("CREATE OR REPLACE TABLE raw_npb AS SELECT * FROM df")
+          #  count = con.execute("SELECT count(*) FROM raw_npb").fetchone()[0]
+           # print(f"Success: {count} NPB-Matchups saved in DuckDB.")
             
-    except Exception as e:
-        print(f"Error saving NPB games in DuckDB: {e}")
-    finally:
-        con.close()
+    #except Exception as e:
+     #   print(f"Error saving NPB games in DuckDB: {e}")
+    #finally:
+     #   con.close()
 
 @task(retries=2, retry_delay_seconds=60)
 def fetch_sumo_task():
@@ -416,15 +466,25 @@ def fetch_sumo_task():
 def fetch_f1_task():
     """Scrape today's F1 events from the ESPN-API."""
     print("Scraping F1 events...")
-    url = "http://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard"
+
+    vienna_tz = pytz.timezone('Europe/Vienna')
+    now = datetime.now(vienna_tz)
+    today_str = now.strftime('%Y-%m-%d')
+    api_date = now.strftime('%Y%m%d')
+    url = f"http://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard?dates={api_date}"
     
     try:
         response = requests.get(url)
+        response.raise_for_status()
         data = response.json()
         f1_events = []
         
         for event in data.get('events', []):
             dt_cet = pd.to_datetime(event.get('date')).tz_convert('Europe/Vienna')
+            event_date = dt_cet.strftime('%Y-%m-%d')
+
+            if event_date != today_str:
+                continue
             
             f1_events.append({
                 'Event_Name': event.get('name'),
@@ -436,74 +496,74 @@ def fetch_f1_task():
         
         return pd.DataFrame(f1_events)
     except Exception as e:
-        print(f"❌ Error Scraping F1: {e}")
+        print(f"Error Scraping F1: {e}")
         return pd.DataFrame()
 
-@task(name="Save Sumo to DuckDB")
-def save_sumo_to_duckdb(df):
-    db_path = 'sports.duckdb'
-    con = duckdb.connect(db_path)
+#@task(name="Save Sumo to DuckDB")
+#def save_sumo_to_duckdb(df):
+ #   db_path = 'sports.duckdb'
+  #  con = duckdb.connect(db_path)
     
-    if df is None or df.empty:
-        print("No sumo month. Initialize empty table for dbt...")
+   # if df is None or df.empty:
+    #    print("No sumo month. Initialize empty table for dbt...")
 
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS raw_sumo (
-                "League" VARCHAR,
-                "Away Team" VARCHAR,
-                "Home Team" VARCHAR,
-                "Away Record" VARCHAR,
-                "Home Record" VARCHAR,
-                "Date" VARCHAR,
-                "Time (CET)" VARCHAR,
-                "End Time (CET)" VARCHAR,
-                "Is Playoff" BOOLEAN
-            )
-        """)
-    else:
-        con.execute("CREATE OR REPLACE TABLE raw_sumo AS SELECT * FROM df")
-        print(f"{len(df)} Sumo Bashos saved in DuckDB.")
+     #   con.execute("""
+      #      CREATE TABLE IF NOT EXISTS raw_sumo (
+       #         "League" VARCHAR,
+        #        "Away Team" VARCHAR,
+         #       "Home Team" VARCHAR,
+          #      "Away Record" VARCHAR,
+           #     "Home Record" VARCHAR,
+            #    "Date" VARCHAR,
+             #   "Time (CET)" VARCHAR,
+              #  "End Time (CET)" VARCHAR,
+               # "Is Playoff" BOOLEAN
+            #)
+        #""")
+    #else:
+     #   con.execute("CREATE OR REPLACE TABLE raw_sumo AS SELECT * FROM df")
+      #  print(f"{len(df)} Sumo Bashos saved in DuckDB.")
     
-    con.close()
-@task
-def save_f1_to_duckdb(df):
-    if df.empty:
-        print("No F1 events found for today. Skipping DuckDB save.")
-        return
-    con = duckdb.connect('sports.duckdb')
-    con.execute("CREATE OR REPLACE TABLE raw_f1 AS SELECT * FROM df")
-    con.close()
+    #con.close()
+#@task
+#def save_f1_to_duckdb(df):
+ #   if df.empty:
+  #      print("No F1 events found for today. Skipping DuckDB save.")
+   #     return
+   # con = duckdb.connect('sports.duckdb')
+    #con.execute("CREATE OR REPLACE TABLE raw_f1 AS SELECT * FROM df")
+    #con.close()
 
 @task(retries=3, retry_delay_seconds=60)
 def fetch_ufc_task():
-    """Fetch today's UFC fights from the ESPN-API."""
-    print("Scraping UFC events...")
-    url = "http://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard"
-    
+
+    vienna_tz = pytz.timezone('Europe/Vienna')
+    today_str = datetime.now(vienna_tz).strftime('%Y%m%d')
+    today_dash = datetime.now(vienna_tz).strftime('%Y-%m-%d')
+
+    print(f"Fetching UFC events for {today_str}")
+    url = f"http://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates={today_str}"
+
+
     try:
         response = requests.get(url)
         data = response.json()
         all_fights = []
         
         for event in data.get('events', []):
-            dt_cet = pd.to_datetime(event.get('date')).tz_convert('Europe/Vienna')
-            
             for comp in event.get('competitions', []):
-                fighters = []
-                for competitor in comp.get('competitors', []):
-                    name = "Unbekannt"
-                    if 'athlete' in competitor:
-                        name = competitor['athlete'].get('displayName')
-                    elif 'team' in competitor:
-                        name = competitor['team'].get('displayName')
-                    fighters.append(name)
+                dt_cet = pd.to_datetime(event.get('date')).tz_convert('Europe/Vienna')
+                if dt_cet.strftime('%Y%m%d') != today_str:
+                    continue
+                
+                fighters = [c.get('athlete', {}).get('displayName') for c in comp.get('competitors', [])]
                 
                 if len(fighters) >= 2:
                     all_fights.append({
                         'Fighter_A': fighters[0],
                         'Fighter_B': fighters[1],
                         'Event_Name': event.get('name'),
-                        'Date': dt_cet.strftime('%Y-%m-%d'),
+                        'Date': today_dash,
                         'Time_CET': dt_cet.strftime('%H:%M'),
                         'League': 'UFC'
                     })
@@ -513,19 +573,22 @@ def fetch_ufc_task():
         print(f"Error scraping UFC data {e}")
         return pd.DataFrame()
 
-@task
-def save_ufc_to_duckdb(df):
-    if df.empty:
-        print("No UFC fights found for today. Skipping DuckDB save.")
-        return
-    print(f"💾 Save {len(df)} UFC fights in DuckDB...")
-    con = duckdb.connect('sports.duckdb')
-    con.execute("CREATE OR REPLACE TABLE raw_ufc AS SELECT * FROM df")
-    con.close()
+#@task
+#def save_ufc_to_duckdb(df):
+ #   if df.empty:
+  #      print("No UFC fights found for today. Skipping DuckDB save.")
+   #     return
+    #print(f"💾 Save {len(df)} UFC fights in DuckDB...")
+    #con = duckdb.connect('sports.duckdb')
+    #con.execute("CREATE OR REPLACE TABLE raw_ufc AS SELECT * FROM df")
+    #con.close()
 
 def fetch_all_leagues():
     """Fetch today's games for all configured leagues."""
-    dfs = [fetch_league(sport, slug, name) for sport, slug, name in LEAGUES]
+
+    vienna_tz = pytz.timezone('Europe/Vienna')
+    today_vienna = datetime.now(vienna_tz).strftime('%Y%m%d')
+    dfs = [fetch_league(sport, slug, name, date=today_vienna) for sport, slug, name in LEAGUES]
     return pd.concat(dfs, ignore_index=True)
 
 @task(retries=3, retry_delay_seconds=60)
@@ -534,24 +597,24 @@ def scrape_task():
     print("🛰️  Scraping ESPN for today's games...")
     return fetch_all_leagues()
 
-@task
-def save_to_duckdb_task(df):
-    print("💾 Saving raw data to DuckDB...")
-    con = duckdb.connect('sports.duckdb')
-    con.execute("CREATE OR REPLACE TABLE raw_games AS SELECT * FROM df")
-    con.close()
+#@task
+#def save_to_duckdb_task(df):
+ #   print("💾 Saving raw data to DuckDB...")
+  #  con = duckdb.connect('sports.duckdb')
+   # con.execute("CREATE OR REPLACE TABLE raw_games AS SELECT * FROM df")
+    #con.close()
 
 @task
 def dbt_transform_task():
     print("🚀 Triggering dbt transformation...")
 
-    project_dir = "/app/sports_transform"
-    profiles_dir = "/app"
+    #project_dir = "sports_transform"
+    #profiles_dir = ".."
     try:
         result = subprocess.run(
-            ["dbt", "run","--profiles-dir", profiles_dir],
-            cwd=project_dir, 
-            check=True,
+            ['dbt', 'run', '--project-dir', '/app/sports_transform', '--profiles-dir', '/app/sports_transform'],
+            #cwd=project_dir, 
+            #check=True,
             capture_output=True,
             text=True
         )
@@ -565,39 +628,42 @@ def dbt_transform_task():
 @task
 def update_history_and_display_task():
 
-    print("\n🏆 TOP 10 GAMES FOR TODAY 🏆")
-    print("="*60)
-    
-    con = duckdb.connect('sports.duckdb')
-    con.execute("""
-        INSERT INTO watched_history (event_date, league, matchup, score, time, watched)
-        SELECT 
-            CAST(CURRENT_DATE AS DATE),
-            "League",
-            "Away Team" || ' @ ' || "Home Team",
-            total_watch_score,
-            "Time (CET)",
-            0
-        FROM fct_daily_schedule
-        ON CONFLICT (event_date, matchup) DO NOTHING
-    """)
+    vienna_tz = pytz.timezone('Europe/Vienna')
+    today_vienna = datetime.now(vienna_tz).strftime('%Y-%m-%d')
 
-    # 2. Fetch the Top 10 for the terminal display
-    df = con.execute("""
-        SELECT 
-            CAST(total_watch_score AS INT) as score,
-            tags,
-            CAST(CURRENT_DATE AS DATE) as date,         
-            "League" as league,
-            "Away Team" || ' @ ' || "Home Team" as matchup,
-            "Time (CET)" as time
-        FROM fct_daily_schedule
-        ORDER BY total_watch_score DESC
-        LIMIT 10
-    """).df()
-    con.close()
+    print("\n🏆 TOP 10 GAMES FOR TODAY 🏆")
     
-    # Print the result to your terminal
+    with engine.begin() as conn:
+        conn.execute(text(f"""
+            INSERT INTO watch_history (date, league, matchup, score, time, watched)
+            SELECT 
+                '{today_vienna}'::date,
+                "League",
+                "Away Team" || ' @ ' || "Home Team",
+                total_watch_score,
+                "Time (CET)"::time,
+                FALSE
+            FROM fct_daily_schedule
+            ON CONFLICT (date, matchup) DO NOTHING
+        """))
+
+        # 2. Top 10 for terminal
+
+        query = f"""
+            SELECT 
+                total_watch_score::INT as score,
+                tags,
+                '{today_vienna}' as date,         
+                "League" as league,
+                "Away Team" || ' @ ' || "Home Team" as matchup,
+                "Time (CET)" as time
+            FROM fct_daily_schedule
+            WHERE "Date" = '{today_vienna}'
+            ORDER BY total_watch_score DESC
+            LIMIT 10
+        """
+        df = pd.read_sql(query, conn)
+
     print(df.to_string(index=False))
     print("="*60)
 
@@ -623,12 +689,12 @@ def update_history_and_display_task():
 
     return df
 
-@task
-def notify_dashboard_sync():
-    db_path = 'sports.duckdb'
-    if os.path.exists(db_path):
-        os.utime(db_path, None)
-        print("Dashboard notified: New dbt data detected.")
+#@task
+#def notify_dashboard_sync():
+ #   db_path = 'sports.duckdb'
+  #  if os.path.exists(db_path):
+   #     os.utime(db_path, None)
+    #    print("Dashboard notified: New dbt data detected.")
 
 @flow(name="Sports Data Pipeline", log_prints=True)
 def sports_flow():
@@ -641,34 +707,27 @@ def sports_flow():
     eurobasket_df = fetch_basketball_task()
     boxing_df = fetch_boxing_task()
     #saving  
-    save_to_duckdb_task(raw_df)
-    save_ufc_to_duckdb(ufc_df)
-    save_f1_to_duckdb(f1_df)
-    save_sumo_to_duckdb(sumo_df)
-    save_npb_to_duckdb(npb_df)
-    save_basketball_to_duckdb(eurobasket_df)
-    save_boxing_to_duckdb(boxing_df)
+    save_to_supabase_task(raw_df)
+    save_ufc_to_supabase(ufc_df)
+    save_f1_to_supabase(f1_df)
+    save_sumo_to_supabase(sumo_df)
+    save_npb_to_supabase(npb_df)
+    save_basketball_to_supabase(eurobasket_df)
+    save_boxing_to_supabase(boxing_df)
     #transformation & display
     dbt_transform_task()
     update_history_and_display_task()
-    notify_dashboard_sync()
+    #notify_dashboard_sync()
 
 if __name__ == "__main__":
-   # sports_flow.serve(
-    #    name="daily-11am-sync",
-     #   cron="0 9 * * *",
-      #  tags=["graz-home-server"]
-    #)
-
-#new test
-#if __name__ == "__main__":
-    #print("Test Run")  This will run the flow immediately for testing purposes. Uncomment to use.
-    #sports_flow()
-
-    print("Scheduling daily runs at 09:00")
-    schedule.every().day.at("09:00").do(sports_flow)
-
-    print("Pipeline scheduled. Waiting for next run...")
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
+    # Wenn "oneshot" als Argument übergeben wird, läuft es nur einmal (für GitHub)
+    if "--oneshot" in sys.argv:
+        print("🚀 Running in One-Shot mode...")
+        sports_flow()
+    else:
+        # Dein bisheriger lokaler Scheduler für das MacBook
+        print("⏰ Running in Scheduler mode (Local)...")
+        schedule.every().day.at("11:00").do(sports_flow)
+        while True:
+            schedule.run_pending()
+            time.sleep(1)

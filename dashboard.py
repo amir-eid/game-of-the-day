@@ -52,12 +52,13 @@ try:
             m2.metric("Highest Score", f"{int(df_filtered['total_watch_score'].max()) if not df_filtered.empty else 0}")
 
             def highlight_scores(val):
-                return 'background-color: #004d00' if val >= 50 else ''
+                return 'background-color: #2ecc71; color: black; font-weight: bold'  if val >= 50 else ''
 
             st.subheader("Today's Top Picks")
             st.dataframe(
-                df_filtered.style.map(highlight_scores, subset=['total_watch_score']), 
-                width="stretch"
+                df_filtered.style.map(highlight_scores, subset=['total_watch_score'])
+                .format(subset=['total_watch_score'], precision=0), 
+                use_container_width=True
             )
 
         with tab2:
