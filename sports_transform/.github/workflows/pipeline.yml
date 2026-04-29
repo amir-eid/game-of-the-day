@@ -26,8 +26,8 @@ jobs:
       - name: Run Pipeline
         env:
           # Hier ziehen wir die Secrets aus den GitHub Einstellungen
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          #SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DBT_PROFILES_DIR: "." 
