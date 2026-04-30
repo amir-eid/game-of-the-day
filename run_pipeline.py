@@ -634,24 +634,6 @@ def update_history_and_display_task():
     
     with engine.begin() as conn:
         conn.execute(text("""
-            WITH unique_schedule AS (
-                SELECT 
-                    "Date"::date as clean_date,
-                    "League" as clean_league,
-                    "Away Team" || ' @ ' || "Home Team" as clean_matchup,
-                    league_id_new,            
-                    home_team_id_new, 
-                    away_team_id_new,
-                    total_watch_score,
-                    "Time (CET)"::time as clean_time,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY "Date"::date, home_team_id_new, away_team_id_new 
-                        ORDER BY total_watch_score DESC, "Time (CET)"::time ASC
-                    ) as rank
-                FROM public.fct_daily_schedule
-                WHERE home_team_id_new IS NOT NULL 
-                  AND away_team_id_new IS NOT NULL
-            )
             INSERT INTO public.watch_history (
                 date, 
                 league,
@@ -663,24 +645,20 @@ def update_history_and_display_task():
                 time, 
                 watched
             )
-            SELECT 
-                clean_date,
-                clean_league,
-                clean_matchup,
-                league_id_new,
-                home_team_id_new,
+            SELECT DISTINCT ON ("Date"::date, home_team_id_new, away_team_id_new)
+                "Date"::date,
+                "League",
+                "Away Team" || ' @ ' || "Home Team",
+                league_id_new,            
+                home_team_id_new, 
                 away_team_id_new,
                 total_watch_score,
-                clean_time,
+                "Time (CET)"::time,
                 FALSE
-            FROM unique_schedule
-            WHERE rank = 1
-            ON CONFLICT (date, home_team_id_new, away_team_id_new)
-            DO UPDATE SET
-                league = EXCLUDED.league,
-                matchup = EXCLUDED.matchup,
-                league_id_new = EXCLUDED.league_id_new,
-                score = EXCLUDED.score;
+            FROM public.fct_daily_schedule
+            WHERE home_team_id_new IS NOT NULL 
+              AND away_team_id_new IS NOT NULL
+            ORDER BY "Date"::date, home_team_id_new, away_team_id_new, total_watch_score DESC;
         """))
 
         # 2. Wir ziehen die Top 10 trotzdem kurz für die Terminal-Logs (gut zum Debuggen bei GitHub)
