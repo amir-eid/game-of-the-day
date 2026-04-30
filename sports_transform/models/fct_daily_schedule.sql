@@ -201,7 +201,9 @@ calculated_scores as (
 )
 
 select
-    league_id, home_team_id, away_team_id,
+    league_id as league_id_new,
+    home_team_id as home_team_id_new,
+    away_team_id as away_team_id_new,
     "League", "Away Team", "Home Team", "Date", "Time (CET)", "End Time (CET)", "Is Playoff",
     (league_pts + favorite_pts + playoff_pts + derby_pts + record_pts + time_pts) as total_watch_score,
     -- Simple tagging
