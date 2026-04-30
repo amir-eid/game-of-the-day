@@ -634,37 +634,38 @@ def update_history_and_display_task():
     
     with engine.begin() as conn:
         conn.execute(text("""
-            INSERT INTO watch_history (
-            date, 
-            league,
-            matchup,
-            league_id_new, 
-            home_team_id_new, 
-            away_team_id_new, 
-            score, 
-            time, 
-            watched
-        )
-        SELECT 
-            "Date"::date, 
-            "League",
-            "Away Team" || ' @ ' || "Home Team" as matchup,        
-            league_id_new,            
-            home_team_id_new, 
-            away_team_id_new,
-            total_watch_score,
-            "Time (CET)"::time,
-            FALSE
-        FROM fct_daily_schedule
-        ON CONFLICT (date, home_team_id_new, away_team_id_new)
-        DO UPDATE SET
-            league = EXCLUDED.league,
-            matchup = EXCLUDED.matchup,
-            league_id_new = EXCLUDED.league_id_new,
-            home_team_id_new = EXCLUDED.home_team_id_new,
-            away_team_id_new = EXCLUDED.away_team_id_new,
-            score = EXCLUDED.score;
-    """))
+            INSERT INTO public.watch_history (
+                date, 
+                league,
+                matchup,
+                league_id_new, 
+                home_team_id_new, 
+                away_team_id_new, 
+                score, 
+                time, 
+                watched
+            )
+            SELECT DISTINCT ON ("Date"::date, home_team_id_new, away_team_id_new)
+                "Date"::date as d,
+                "League",
+                "Away Team" || ' @ ' || "Home Team" as matchup,
+                league_id_new,            
+                home_team_id_new, 
+                away_team_id_new,
+                total_watch_score,
+                "Time (CET)"::time,
+                FALSE
+            FROM public.fct_daily_schedule
+            ORDER BY d, home_team_id_new, away_team_id_new, total_watch_score DESC
+            ON CONFLICT (date, home_team_id_new, away_team_id_new)
+            DO UPDATE SET
+                league = EXCLUDED.league,
+                matchup = EXCLUDED.matchup,
+                league_id_new = EXCLUDED.league_id_new,
+                home_team_id_new = EXCLUDED.home_team_id_new,
+                away_team_id_new = EXCLUDED.away_team_id_new,
+                score = EXCLUDED.score;
+        """))
 
         # 2. Wir ziehen die Top 10 trotzdem kurz für die Terminal-Logs (gut zum Debuggen bei GitHub)
         query = f"""
