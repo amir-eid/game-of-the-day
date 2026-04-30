@@ -626,6 +626,7 @@ def dbt_transform_task():
         raise e
 
 @task
+@task
 def update_history_and_display_task():
     vienna_tz = pytz.timezone('Europe/Vienna')
     today_vienna = datetime.now(vienna_tz).strftime('%Y-%m-%d')
@@ -633,75 +634,76 @@ def update_history_and_display_task():
     print("\n🏆 UPDATING HISTORY & NOTIFYING DISCORD 🏆")
     
     with engine.begin() as conn:
-        conn.execute(text("DELETE FROM public.watch_history WHERE date >= CURRENT_DATE;"))
-
+        # Der 'Smart Upsert'
         conn.execute(text("""
-            INSERT INTO public.watch_history (
-                date, 
-                league,
-                matchup,
-                league_id_new, 
-                home_team_id_new, 
-                away_team_id_new, 
-                score, 
-                time, 
-                watched
+            WITH unique_source AS (
+                SELECT DISTINCT ON ("Date"::date, "Away Team" || ' @ ' || "Home Team")
+                    "Date"::date as clean_date,
+                    "League" as clean_league,
+                    "Away Team" || ' @ ' || "Home Team" as clean_matchup,
+                    league_id_new,            
+                    home_team_id_new, 
+                    away_team_id_new,
+                    total_watch_score,
+                    "Time (CET)"::time as clean_time
+                FROM public.fct_daily_schedule
+                WHERE home_team_id_new IS NOT NULL 
+                  AND away_team_id_new IS NOT NULL
+                ORDER BY "Date"::date, ("Away Team" || ' @ ' || "Home Team"), total_watch_score DESC
             )
-            SELECT DISTINCT ON ("Date"::date, "Away Team" || ' @ ' || "Home Team")
-                "Date"::date,
-                "League",
-                "Away Team" || ' @ ' || "Home Team" as matchup,
-                league_id_new,            
-                home_team_id_new, 
-                away_team_id_new,
-                total_watch_score,
-                "Time (CET)"::time,
-                FALSE
-            FROM public.fct_daily_schedule
-            WHERE home_team_id_new IS NOT NULL 
-              AND away_team_id_new IS NOT NULL
-            ORDER BY "Date"::date, ("Away Team" || ' @ ' || "Home Team"), total_watch_score DESC;
+            INSERT INTO public.watch_history (
+                date, league, matchup, league_id_new, 
+                home_team_id_new, away_team_id_new, 
+                score, time, watched
+            )
+            SELECT 
+                clean_date, clean_league, clean_matchup, league_id_new,
+                home_team_id_new, away_team_id_new, 
+                total_watch_score, clean_time, FALSE
+            FROM unique_source
+            ON CONFLICT (date, home_team_id_new, away_team_id_new)
+            DO UPDATE SET
+                -- Wir aktualisieren Metadaten, aber lassen 'watched' völlig in Ruhe!
+                score = EXCLUDED.score,
+                time = EXCLUDED.time,
+                league = EXCLUDED.league,
+                matchup = EXCLUDED.matchup,
+                league_id_new = EXCLUDED.league_id_new
         """))
 
-        # 2. Wir ziehen die Top 10 trotzdem kurz für die Terminal-Logs (gut zum Debuggen bei GitHub)
+        # Top 10 für die Logs ziehen
         query = f"""
             SELECT 
-                total_watch_score::INT as score,
-                "League" as league,
-                "Away Team" || ' @ ' || "Home Team" as matchup,
-                "Time (CET)" as time
-            FROM fct_daily_schedule
-            WHERE "Date" = '{today_vienna}'
-            ORDER BY total_watch_score DESC
+                score,
+                league,
+                matchup,
+                time
+            FROM watch_history
+            WHERE date = '{today_vienna}'
+            ORDER BY score DESC
             LIMIT 10
         """
         df = pd.read_sql(query, conn)
 
-    # Das erscheint nur in deinen GitHub/Terminal Logs
     print(df.to_string(index=False))
     print("="*60)
 
-    # 3. Neue, schlanke Discord Benachrichtigung
+    # Discord Notification
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
     dashboard_url = "https://game-of-the-day-nqjhazo6peteukrajbpkhw.streamlit.app/"
 
-    if not webhook_url:
-        print("No Discord Webhook URL found!")
-        return
-
-    # Nur noch ein kurzer Teaser mit Link
-    discord_msg = (
-        "🚀 **Der neue Spielplan ist live!**\n\n"
-        f"Heute warten **{len(df)} Top-Spiele** auf dich.\n"
-        "Schau dir die Details im Dashboard an:\n"
-        f"👉 {dashboard_url}"
-    )
-
-    try:
-        requests.post(webhook_url, json={"content": discord_msg})
-        print("📲 Discord notification sent!")
-    except Exception as e:
-        print(f"❌ Failed to send Discord notification: {e}")
+    if webhook_url:
+        discord_msg = (
+            "🚀 **Der neue Spielplan ist live!**\n\n"
+            f"Heute warten **{len(df)} Top-Spiele** auf dich.\n"
+            "Schau dir die Details im Dashboard an:\n"
+            f"👉 {dashboard_url}"
+        )
+        try:
+            requests.post(webhook_url, json={"content": discord_msg})
+            print("📲 Discord notification sent!")
+        except Exception as e:
+            print(f"❌ Failed to send Discord notification: {e}")
 
     return df
 
