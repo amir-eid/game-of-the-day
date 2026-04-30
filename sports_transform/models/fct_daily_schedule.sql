@@ -59,19 +59,19 @@ with raw_games_source as (
     select * from {{ source('external_data', 'raw_boxing') }}
 ),
 base as (
-    select * from raw_games_source
+    select *, league_id, home_team_id, away_team_id from raw_games_source
     union all
-    select * from raw_ufc_source
+    select *, league_id, home_team_id, away_team_id from raw_ufc_source
     union all
-    select * from raw_f1_source
+    select *, league_id, home_team_id, away_team_id from raw_f1_source
     union all
-    select * from raw_sumo_source
+    select *, league_id, home_team_id, away_team_id from raw_sumo_source
     union all
-    select * from raw_npb_source
+    select *, league_id, home_team_id, away_team_id from raw_npb_source
     union all
-    select * from raw_eurobasket_source
+    select *, league_id, home_team_id, away_team_id from raw_eurobasket_source
     union all
-    select * from raw_boxing_source
+    select *, league_id, home_team_id, away_team_id from raw_boxing_source
 ),
 -- This is where we create the "missing" columns based on your preferences
 logic as (
@@ -189,6 +189,7 @@ calculated_scores as (
 )
 
 select
+    league_id, home_team_id, away_team_id,
     "League", "Away Team", "Home Team", "Date", "Time (CET)", "End Time (CET)", "Is Playoff",
     (league_pts + favorite_pts + playoff_pts + derby_pts + record_pts + time_pts) as total_watch_score,
     -- Simple tagging
