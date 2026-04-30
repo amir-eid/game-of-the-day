@@ -27,18 +27,17 @@ def load_data():
         st.error(f"Fehler beim Laden der Daten: {e}")
         return pd.DataFrame()
 
-# --- HAUPT-LOGIK ---
 try:
     df = load_data()
 
     if df.empty:
-        st.warning("Keine Daten in der Datenbank gefunden. Läuft die GitHub Action?")
+        st.warning("No data found in database. Is GitHub Action running?")
     else:
         # 1. Sidebar Filter
         st.sidebar.header("Filter")
         liga_options = sorted(df['League'].unique())
         liga_filter = st.sidebar.multiselect("Choose League:", options=liga_options, default=liga_options)
-        st.sidebar.info("🔄 **Status:** Live-Verbindung zu Supabase")
+        st.sidebar.info("🔄 **Status:** Live connection with Supabase")
 
         df_filtered = df[df['League'].isin(liga_filter)]
 
