@@ -652,7 +652,11 @@ def update_history_and_display_task():
             "Time (CET)"::time,
             FALSE
         FROM fct_daily_schedule
-        ON CONFLICT (date, home_team_id_new, away_team_id_new) DO NOTHING;
+        ON CONFLICT (date, home_team_id_new, away_team_id_new)
+        DO UPDATE SET
+            league_id_new = EXCLUDED.league_id_new,
+            score = EXCLUDED.score,
+            time = EXCLUDED.time;
     """))
 
         # 2. Wir ziehen die Top 10 trotzdem kurz für die Terminal-Logs (gut zum Debuggen bei GitHub)
