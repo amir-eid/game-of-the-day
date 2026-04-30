@@ -633,19 +633,27 @@ def update_history_and_display_task():
     print("\n🏆 UPDATING HISTORY & NOTIFYING DISCORD 🏆")
     
     with engine.begin() as conn:
-        # 1. History in Supabase aktualisieren (wichtig für spätere Analysen!)
-        conn.execute(text(f"""
-            INSERT INTO watch_history (date, league, matchup, score, time, watched)
-            SELECT 
-                '{today_vienna}'::date,
-                "League",
-                "Away Team" || ' @ ' || "Home Team",
-                total_watch_score,
-                "Time (CET)"::time,
-                FALSE
-            FROM fct_daily_schedule
-            ON CONFLICT (date, matchup) DO NOTHING
-        """))
+        conn.execute(text("""
+            INSERT INTO watch_history (
+            date, 
+            league_id_new, 
+            home_team_id_new, 
+            away_team_id_new, 
+            score, 
+            time, 
+            watched
+        )
+        SELECT 
+            "Date"::date,         
+            league_id,            
+            home_team_id, 
+            away_team_id,
+            total_watch_score,
+            "Time (CET)"::time,
+            FALSE
+        FROM fct_daily_schedule
+        ON CONFLICT (date, home_team_id_new, away_team_id_new) DO NOTHING;
+    """))
 
         # 2. Wir ziehen die Top 10 trotzdem kurz für die Terminal-Logs (gut zum Debuggen bei GitHub)
         query = f"""
