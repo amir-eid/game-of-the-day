@@ -4,10 +4,10 @@
 
 -- 1. Dimensionen definieren
 with teams as (
-    select id as team_id, team_name from {{ source('external_data', 'dim_teams') }}
+    select team_id, team_name from {{ source('external_data', 'dim_teams') }}
 ),
 leagues as (
-    select id as league_id, league_name from {{ source('external_data', 'dim_leagues') }}
+    select league_id, league_name from {{ source('external_data', 'dim_leagues') }}
 ),
 
 -- 2. Raw Sources (Keine IDs hier, die existieren in den Raw-Tabellen nicht)
