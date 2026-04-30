@@ -636,6 +636,8 @@ def update_history_and_display_task():
         conn.execute(text("""
             INSERT INTO watch_history (
             date, 
+            league,
+            matchup,
             league_id_new, 
             home_team_id_new, 
             away_team_id_new, 
@@ -644,7 +646,9 @@ def update_history_and_display_task():
             watched
         )
         SELECT 
-            "Date"::date,         
+            "Date"::date, 
+            "League",
+            "Away Team" || ' @ ' || "Home Team" as matchup,        
             league_id_new,            
             home_team_id_new, 
             away_team_id_new,
@@ -654,11 +658,12 @@ def update_history_and_display_task():
         FROM fct_daily_schedule
         ON CONFLICT (date, home_team_id_new, away_team_id_new)
         DO UPDATE SET
+            league = EXCLUDED.league,
+            matchup = EXCLUDED.matchup,
             league_id_new = EXCLUDED.league_id_new,
             home_team_id_new = EXCLUDED.home_team_id_new,
             away_team_id_new = EXCLUDED.away_team_id_new,
-            score = EXCLUDED.score
-            ;
+            score = EXCLUDED.score;
     """))
 
         # 2. Wir ziehen die Top 10 trotzdem kurz für die Terminal-Logs (gut zum Debuggen bei GitHub)
