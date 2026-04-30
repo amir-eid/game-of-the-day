@@ -59,9 +59,10 @@ try:
             blacklist = ['league_id_new', 'home_team_id_new', 'away_team_id_new', 'id']
             cols_to_show = [c for c in df_filtered.columns if c not in blacklist]
             st.dataframe(
-                df_filtered.style.map(highlight_scores, subset=['total_watch_score'])
+                df_filtered[cols_to_show].style.map(highlight_scores, subset=['total_watch_score'])
                 .format(subset=['total_watch_score'], precision=0), 
-                use_container_width=True
+                use_container_width=True,
+                hide_index=True
             )
 
         with tab2:
