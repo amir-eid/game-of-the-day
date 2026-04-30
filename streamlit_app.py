@@ -42,7 +42,7 @@ try:
         df_filtered = df[df['League'].isin(liga_filter)]
 
         # 2. Dashboard Tabs
-        tab1, tab2, tab3 = st.tabs(["🔥 Recommendations", "📰 Sports News", "📅 League Calendar"])
+        tab1, tab2 = st.tabs(["🔥 Recommendations", "📰 Sports News"])
 
         with tab1:
             m1, m2 = st.columns(2)
@@ -100,53 +100,6 @@ try:
                         st.divider()
             else:
                 st.info("No games selected.")
-
-        with tab3:
-            st.subheader("📅 League Season Tracker")
-            
-            league_knowledge = {
-                "NBA": {"months": [10, 6], "status": "Playoffs", "event": "NBA Finals in June"},
-                "EuroLeague": {"months": [10, 5], "status": "Final Stretch", "event": "Final Four in May"},
-                "ABA": {"months": [9, 5], "status": "Regular Season", "event": "Playoffs in May"},
-                "MLB": {"months": [3, 11], "status": "Early Season", "event": "All-Star Game in July"},
-                "NHL": {"months": [10, 6], "status": "Regular Season", "event": "Stanley Cup Playoffs"},
-                "NPB": {"months": [3, 10], "status": "Regular Season", "event": "Japan Series in October"},
-                "UFC": {"months": [1, 12], "status": "Year-round", "event": "Weekly Fight Nights"},
-                "Boxing": {"months": [1, 12], "status": "Year-round", "event": "Major Title Fights"},
-                "F1": {"months": [3, 12], "status": "Season Active", "event": "Grand Prix Weekends"},
-                "Sumo": {"months": [1, 12], "status": "Odd Months", "event": "Jan, Mar, May, Jul, Sep, Nov"},
-                "NFL": {"months": [9, 2], "status": "Offseason", "event": "Training Camp in July"},
-                "ENG.1": {"months": [8, 5], "status": "Title Race", "event": "Season Finale in May"},
-                "GER.1": {"months": [8, 5], "status": "Final Stretch", "event": "Relegation Battle"},
-                "ESP.1": {"months": [8, 5], "status": "Regular Season", "event": "Title Race"},
-            }
-
-            current_month = datetime.now().month
-            status_data = []
-
-            for liga, info in league_knowledge.items():
-                start, end = info["months"]
-                if start <= end:
-                    is_active = (start <= current_month <= end)
-                else:
-                    is_active = (current_month >= start or current_month <= end)
-            
-                has_games_today = liga in df['League'].values
-            
-                status_data.append({
-                    "League": liga,
-                    "Status": "✅ Active" if is_active else "❌ Offseason",
-                    "Today": "🏀 Scheduled" if has_games_today else "---",
-                    "Phase": info["status"] if is_active else "Resting",
-                    "Next Highlight": info["event"]
-                })
-
-            tracker_df = pd.DataFrame(status_data)
-        
-            def highlight_today(val):
-                return 'color: #00ff00; font-weight: bold' if val == "🏀 Scheduled" else ''
-
-            st.table(tracker_df.style.map(highlight_today, subset=['Today']))
 
 except Exception as e:
     st.error(f"Critical Error: {e}")
