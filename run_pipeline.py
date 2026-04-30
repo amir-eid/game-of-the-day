@@ -657,7 +657,7 @@ def update_history_and_display_task():
             league_id_new = EXCLUDED.league_id_new,
             home_team_id_new = EXCLUDED.home_team_id_new,
             away_team_id_new = EXCLUDED.away_team_id_new,
-            score = EXCLUDED.score,
+            score = EXCLUDED.score
             ;
     """))
 
