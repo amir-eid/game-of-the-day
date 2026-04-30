@@ -4,43 +4,73 @@
 
 -- 1. Dimensionen definieren
 with teams as (
-    select team_id, team_name from {{ source('external_data', 'dim_teams') }}
+    select team_id, team_name from {{ source('public', 'dim_teams') }}
 ),
 leagues as (
-    select league_id, league_name from {{ source('external_data', 'dim_leagues') }}
+    select league_id, league_name from {{ source('public', 'dim_leagues') }}
 ),
 
--- 2. Raw Sources (Keine IDs hier, die existieren in den Raw-Tabellen nicht)
 raw_games_source as (
     select
         "League", "Away Team", "Home Team", "Away Record", "Home Record",
-        "Date", "Time (CET)", "End Time (CET)", "Is Playoff"
-    from {{ source('external_data', 'raw_games') }}
+        "Date"::date, "Time (CET)"::time, "End Time (CET)"::time, "Is Playoff"::boolean
+    from {{ source('public', 'raw_games') }}
 ),
 
 raw_ufc_source as (
     select
         'UFC' as "League", "Fighter_B" as "Away Team", "Fighter_A" as "Home Team",
-        '0-0' as "Away Record", '0-0' as "Home Record", "Date", "Time_CET" as "Time (CET)",
-        TO_CHAR((CAST("Date" || ' ' || "Time_CET" AS TIMESTAMP) + interval '30 minutes'), 'HH24:MI') as "End Time (CET)",
+        '0-0' as "Away Record", '0-0' as "Home Record", 
+        "Date"::date, 
+        "Time_CET"::time as "Time (CET)",
+        ("Time_CET"::time + interval '30 minutes') as "End Time (CET)",
         false as "Is Playoff"
-    from {{ source('external_data', 'raw_ufc') }}
+    from {{ source('public', 'raw_ufc') }}
 ),
 
 raw_f1_source as (
     select 
         'F1' as "League", "Event_Name" as "Away Team", "Circuit" as "Home Team",
-        'N/A' as "Away Record", 'N/A' as "Home Record", "Date", "Time_CET" as "Time (CET)",
-        TO_CHAR((CAST("Date" || ' ' || "Time_CET" AS TIMESTAMP) + interval '2 hours'), 'HH24:MI') as "End Time (CET)",
+        'N/A' as "Away Record", 'N/A' as "Home Record", 
+        "Date"::date, 
+        "Time_CET"::time as "Time (CET)",
+        ("Time_CET"::time + interval '2 hours') as "End Time (CET)",
         false as "Is Playoff"
-    from {{ source('external_data', 'raw_f1') }}
+    from {{ source('public', 'raw_f1') }}
 ),
 
-raw_sumo_source as (select "League", "Away Team", "Home Team", "Away Record", "Home Record", "Date", "Time (CET)", "End Time (CET)", "Is Playoff" from {{ source('external_data', 'raw_sumo') }}),
-raw_npb_source as (select "League", "Away Team", "Home Team", "Away Record", "Home Record", "Date", "Time (CET)", "End Time (CET)", "Is Playoff" from {{ source('external_data', 'raw_npb') }}),
-raw_eurobasket_source as (select "League", "Away Team", "Home Team", "Away Record", "Home Record", "Date", "Time (CET)", "End Time (CET)", "Is Playoff" from {{ source('external_data', 'raw_eurobasket') }}),
-raw_boxing_source as (select "League", "Away Team", "Home Team", "Away Record", "Home Record", "Date", "Time (CET)", "End Time (CET)", "Is Playoff" from {{ source('external_data', 'raw_boxing') }}),
+-- Die anderen Quellen (Sumo, NPB, etc.) analog einbinden
+raw_sumo_source as (
+    select "League", "Away Team", "Home Team", "Away Record", "Home Record", 
+           "Date"::date, "Time (CET)"::time, "End Time (CET)"::time, "Is Playoff"::boolean 
+    from {{ source('public', 'raw_sumo') }}
+),
 
+raw_npb_source as (
+    select "League", "Away Team", "Home Team", "Away Record", "Home Record", 
+           "Date"::date, "Time (CET)"::time, "End Time (CET)"::time, "Is Playoff"::boolean 
+    from {{ source('public', 'raw_npb') }}
+),
+
+raw_eurobasket_source as (
+    select 
+        "League", "Away Team", "Home Team", "Away Record", "Home Record", 
+        "Date"::date, 
+        "Time (CET)"::time, 
+        "End Time (CET)"::time, 
+        "Is Playoff"::boolean 
+    from {{ source('public', 'raw_eurobasket') }}
+),
+
+raw_boxing_source as (
+    select 
+        "League", "Away Team", "Home Team", "Away Record", "Home Record", 
+        "Date"::date, 
+        "Time (CET)"::time, 
+        "End Time (CET)"::time, 
+        "Is Playoff"::boolean 
+    from {{ source('public', 'raw_boxing') }}
+),
 -- 3. Union All
 base as (
     select * from raw_games_source

@@ -625,7 +625,43 @@ def dbt_transform_task():
         print(f"STDERR: {e.stderr}")
         raise e
 
-@task
+
+@task(name="Auto-Seed All Athletes & Teams")
+def auto_seed_teams_task():
+    print("🌱 Running Full Auto-Seed for Teams and Athletes...")
+    seed_sql = text("""
+        INSERT INTO public.dim_teams (team_name)
+        SELECT DISTINCT name
+        FROM (
+            -- Klassische Teams
+            SELECT "Home Team" AS name FROM public.raw_games UNION
+            SELECT "Away Team" FROM public.raw_games UNION
+            SELECT "Home Team" FROM public.raw_npb UNION
+            SELECT "Away Team" FROM public.raw_npb UNION
+            SELECT "Home Team" FROM public.raw_eurobasket UNION
+            SELECT "Away Team" FROM public.raw_eurobasket UNION
+            
+            -- Boxer & Sumo-Ringer
+            SELECT "Home Team" FROM public.raw_boxing UNION
+            SELECT "Away Team" FROM public.raw_boxing UNION
+            SELECT "Home Team" FROM public.raw_sumo UNION
+            SELECT "Away Team" FROM public.raw_sumo UNION
+            
+            -- UFC Fighter
+            SELECT "Fighter_A" FROM public.raw_ufc UNION
+            SELECT "Fighter_B" FROM public.raw_ufc
+        ) AS all_competitors
+        WHERE name IS NOT NULL 
+          AND NOT EXISTS (
+            SELECT 1 FROM public.dim_teams dt 
+            WHERE dt.team_name = all_competitors.name
+        )
+        ON CONFLICT (team_name) DO NOTHING;
+    """)
+    with engine.begin() as conn:
+        conn.execute(seed_sql)
+    
+
 @task
 def update_history_and_display_task():
     vienna_tz = pytz.timezone('Europe/Vienna')
@@ -634,10 +670,11 @@ def update_history_and_display_task():
     print("\n🏆 UPDATING HISTORY & NOTIFYING DISCORD 🏆")
     
     with engine.begin() as conn:
-        # Der 'Smart Upsert'
+        # Der 'Smart Upsert': Fügt neue Spiele ein, aktualisiert Scores,
+        # aber lässt die Spalte 'watched' bei bestehenden Zeilen unberührt.
         conn.execute(text("""
             WITH unique_source AS (
-                SELECT DISTINCT ON ("Date"::date, "Away Team" || ' @ ' || "Home Team")
+                SELECT DISTINCT ON ("Date"::date, home_team_id_new, away_team_id_new)
                     "Date"::date as clean_date,
                     "League" as clean_league,
                     "Away Team" || ' @ ' || "Home Team" as clean_matchup,
@@ -649,7 +686,7 @@ def update_history_and_display_task():
                 FROM public.fct_daily_schedule
                 WHERE home_team_id_new IS NOT NULL 
                   AND away_team_id_new IS NOT NULL
-                ORDER BY "Date"::date, ("Away Team" || ' @ ' || "Home Team"), total_watch_score DESC
+                ORDER BY "Date"::date, home_team_id_new, away_team_id_new, total_watch_score DESC
             )
             INSERT INTO public.watch_history (
                 date, league, matchup, league_id_new, 
@@ -663,12 +700,11 @@ def update_history_and_display_task():
             FROM unique_source
             ON CONFLICT (date, home_team_id_new, away_team_id_new)
             DO UPDATE SET
-                -- Wir aktualisieren Metadaten, aber lassen 'watched' völlig in Ruhe!
                 score = EXCLUDED.score,
                 time = EXCLUDED.time,
                 league = EXCLUDED.league,
                 matchup = EXCLUDED.matchup,
-                league_id_new = EXCLUDED.league_id_new
+                league_id_new = EXCLUDED.league_id_new;
         """))
 
         # Top 10 für die Logs ziehen
@@ -732,6 +768,8 @@ def sports_flow():
     save_npb_to_supabase(npb_df)
     save_basketball_to_supabase(eurobasket_df)
     save_boxing_to_supabase(boxing_df)
+
+    auto_seed_teams_task()  
     #transformation & display
     dbt_transform_task()
     update_history_and_display_task()
