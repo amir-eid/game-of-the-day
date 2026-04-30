@@ -633,6 +633,8 @@ def update_history_and_display_task():
     print("\n🏆 UPDATING HISTORY & NOTIFYING DISCORD 🏆")
     
     with engine.begin() as conn:
+        conn.execute(text("DELETE FROM public.watch_history WHERE date >= CURRENT_DATE;"))
+
         conn.execute(text("""
             INSERT INTO public.watch_history (
                 date, 
@@ -645,10 +647,10 @@ def update_history_and_display_task():
                 time, 
                 watched
             )
-            SELECT DISTINCT ON ("Date"::date, home_team_id_new, away_team_id_new)
+            SELECT DISTINCT ON ("Date"::date, "Away Team" || ' @ ' || "Home Team")
                 "Date"::date,
                 "League",
-                "Away Team" || ' @ ' || "Home Team",
+                "Away Team" || ' @ ' || "Home Team" as matchup,
                 league_id_new,            
                 home_team_id_new, 
                 away_team_id_new,
@@ -658,7 +660,7 @@ def update_history_and_display_task():
             FROM public.fct_daily_schedule
             WHERE home_team_id_new IS NOT NULL 
               AND away_team_id_new IS NOT NULL
-            ORDER BY "Date"::date, home_team_id_new, away_team_id_new, total_watch_score DESC;
+            ORDER BY "Date"::date, ("Away Team" || ' @ ' || "Home Team"), total_watch_score DESC;
         """))
 
         # 2. Wir ziehen die Top 10 trotzdem kurz für die Terminal-Logs (gut zum Debuggen bei GitHub)
