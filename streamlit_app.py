@@ -20,7 +20,7 @@ def load_data():
     engine = create_engine(db_url)
     
     try:
-        query = "SELECT * FROM fct_daily_schedule ORDER BY total_watch_score DESC"
+        query = "SELECT * FROM v_dashboard_top_picks"
         df = pd.read_sql(query, engine)
         return df
     except Exception as e:
