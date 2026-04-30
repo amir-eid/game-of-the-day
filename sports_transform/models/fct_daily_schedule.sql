@@ -13,7 +13,10 @@ with raw_games_source as (
         "Date",
         "Time (CET)",
         "End Time (CET)",
-        "Is Playoff"
+        "Is Playoff",
+        league_id,
+        home_team_id,
+        away_team_id
     from {{ source('external_data', 'raw_games') }}
 ),
 
@@ -27,7 +30,10 @@ with raw_games_source as (
             "Date",
             "Time_CET" as "Time (CET)",
             TO_CHAR((CAST("Date" || ' ' || "Time_CET" AS TIMESTAMP) + interval '30 minutes'), 'HH24:MI') as "End Time (CET)",
-            false as "Is Playoff"
+            false as "Is Playoff",
+            league_id,
+            home_team_id,
+            away_team_id
         from {{ source('external_data', 'raw_ufc') }}
 ),
 
@@ -41,37 +47,43 @@ with raw_games_source as (
         "Date",
         "Time_CET" as "Time (CET)",
         TO_CHAR((CAST("Date" || ' ' || "Time_CET" AS TIMESTAMP) + interval '2 hours'), 'HH24:MI') as "End Time (CET)",
-        false as "Is Playoff"
+        false as "Is Playoff",
+        league_id,
+        home_team_id,
+        away_team_id
     from {{ source('external_data', 'raw_f1') }}
 ),
 
     raw_sumo_source as (
-    select * from {{ source('external_data', 'raw_sumo') }}
+    select *, league_id, home_team_id, away_team_id
+    from {{ source('external_data', 'raw_sumo') }}
 ),
 
     raw_npb_source as (
-    select * from {{ source('external_data', 'raw_npb') }}
+    select *, league_id, home_team_id, away_team_id
+    from {{ source('external_data', 'raw_npb') }}
 ),
     raw_eurobasket_source as (
-    select * from {{ source('external_data', 'raw_eurobasket') }}
+    select *, league_id, home_team_id, away_team_id
+    from {{ source('external_data', 'raw_eurobasket') }}
 ),
     raw_boxing_source as (
-    select * from {{ source('external_data', 'raw_boxing') }}
+    select *, league_id, home_team_id, away_team_id from {{ source('external_data', 'raw_boxing') }}
 ),
 base as (
-    select *, league_id, home_team_id, away_team_id from raw_games_source
+    select * from raw_games_source
     union all
-    select *, league_id, home_team_id, away_team_id from raw_ufc_source
+    select * from raw_ufc_source
     union all
-    select *, league_id, home_team_id, away_team_id from raw_f1_source
+    select * from raw_f1_source
     union all
-    select *, league_id, home_team_id, away_team_id from raw_sumo_source
+    select * from raw_sumo_source
     union all
-    select *, league_id, home_team_id, away_team_id from raw_npb_source
+    select * from raw_npb_source
     union all
-    select *, league_id, home_team_id, away_team_id from raw_eurobasket_source
+    select * from raw_eurobasket_source
     union all
-    select *, league_id, home_team_id, away_team_id from raw_boxing_source
+    select * from raw_boxing_source
 ),
 -- This is where we create the "missing" columns based on your preferences
 logic as (
@@ -198,12 +210,12 @@ select
     case when "Is Playoff" = true then '🏆 Playoff ' else '' end as tags
 from calculated_scores
 where 
-    "Date" = TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'EUROPE/VIENNA', 'YYYY-MM-DD')
+    ("Date" = TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'EUROPE/VIENNA', 'YYYY-MM-DD')
     or
     (
         "Date" = TO_CHAR((CURRENT_TIMESTAMP AT TIME ZONE 'EUROPE/VIENNA' + interval '1 day'), 'YYYY-MM-DD') 
         and "Time (CET)" < '05:00'
-    )
+    ))
      and
     ("Time (CET)" < '02:00' or "Time (CET)" > '10:00')
 order by total_watch_score desc
