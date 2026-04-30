@@ -629,7 +629,7 @@ def dbt_transform_task():
 def update_history_and_display_task():
     vienna_tz = pytz.timezone('Europe/Vienna')
     today_vienna = datetime.now(vienna_tz).strftime('%Y-%m-%d')
-
+    
     print("\n🏆 UPDATING HISTORY & NOTIFYING DISCORD 🏆")
     
     with engine.begin() as conn:

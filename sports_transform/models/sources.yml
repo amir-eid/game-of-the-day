@@ -5,6 +5,8 @@ sources:
     database: postgres
     schema: public
     tables:
+      - name: dim_teams
+      - name: dim_leagues
       - name: raw_games
       - name: raw_ufc
       - name: raw_f1
