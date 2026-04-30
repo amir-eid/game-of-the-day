@@ -645,9 +645,9 @@ def update_history_and_display_task():
         )
         SELECT 
             "Date"::date,         
-            league_id,            
-            home_team_id, 
-            away_team_id,
+            league_id_new,            
+            home_team_id_new, 
+            away_team_id_new,
             total_watch_score,
             "Time (CET)"::time,
             FALSE
