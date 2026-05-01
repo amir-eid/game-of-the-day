@@ -158,13 +158,13 @@ from calculated_scores
 where 
     -- Datums-Filter (Heute und Morgen früh)
     (
-        "Date" = TO_CHAR(CURRENT_TIMESTAMP AT TIME ZONE 'EUROPE/VIENNA', 'YYYY-MM-DD')
+        "Date" = (CURRENT_TIMESTAMP AT TIME ZONE 'EUROPE/VIENNA')::date
         or
         (
-            "Date" = TO_CHAR((CURRENT_TIMESTAMP AT TIME ZONE 'EUROPE/VIENNA' + interval '1 day'), 'YYYY-MM-DD') 
+            "Date" = ((CURRENT_TIMESTAMP AT TIME ZONE 'EUROPE/VIENNA') + interval '1 day')::date 
             and "Time (CET)" < '05:00'
         )
     )
-    -- Dein Zeit-Filter (Keine Spiele zwischen 02:00 und 10:00 morgens)
+    -- Zeit-Filter (Keine Spiele zwischen 02:00 und 10:00 morgens)
     and ("Time (CET)" < '02:00' or "Time (CET)" > '10:00')
 order by total_watch_score desc
