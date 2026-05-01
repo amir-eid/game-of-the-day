@@ -1,7 +1,7 @@
 version: 2
 
 sources:
-  - name: external_data
+  - name: public
     database: postgres
     schema: public
     tables:
