@@ -91,8 +91,12 @@ joined_ids as (
         t_away.team_id as away_team_id_new
     from base b
     left join leagues l on b."League" = l.league_name
-    left join teams t_home on b."Home Team" = t_home.team_name
-    left join teams t_away on b."Away Team" = t_away.team_name
+    left join teams t_home 
+        on b."Home Team" = t_home.team_name 
+        and b."League" = t_home.league_name
+    left join teams t_away 
+        on b."Away Team" = t_away.team_name 
+        and b."League" = t_away.league_name
 ),
 
 -- 5. Scoring Logik

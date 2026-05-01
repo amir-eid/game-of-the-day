@@ -628,35 +628,40 @@ def dbt_transform_task():
 
 @task(name="Auto-Seed All Athletes & Teams")
 def auto_seed_teams_task():
-    print("🌱 Running Full Auto-Seed for Teams and Athletes...")
+    print("🌱 Running Full Auto-Seed for Teams and Athletes (with League Context)...")
     seed_sql = text("""
-        INSERT INTO public.dim_teams (team_name)
-        SELECT DISTINCT name
+        INSERT INTO public.dim_teams (team_name, league_name)
+        SELECT DISTINCT name, league
         FROM (
-            -- Klassische Teams
-            SELECT "Home Team" AS name FROM public.raw_games UNION
-            SELECT "Away Team" FROM public.raw_games UNION
-            SELECT "Home Team" FROM public.raw_npb UNION
-            SELECT "Away Team" FROM public.raw_npb UNION
-            SELECT "Home Team" FROM public.raw_eurobasket UNION
-            SELECT "Away Team" FROM public.raw_eurobasket UNION
+            -- Klassische Teams aus raw_games (ESPN)
+            SELECT "Home Team" AS name, "League" AS league FROM public.raw_games UNION
+            SELECT "Away Team", "League" FROM public.raw_games UNION
+            
+            -- NPB (Japan Baseball)
+            SELECT "Home Team", 'NPB' FROM public.raw_npb UNION
+            SELECT "Away Team", 'NPB' FROM public.raw_npb UNION
+            
+            -- Eurobasket / EuroLeague
+            SELECT "Home Team", 'Eurobasket' FROM public.raw_eurobasket UNION
+            SELECT "Away Team", 'Eurobasket' FROM public.raw_eurobasket UNION
             
             -- Boxer & Sumo-Ringer
-            SELECT "Home Team" FROM public.raw_boxing UNION
-            SELECT "Away Team" FROM public.raw_boxing UNION
-            SELECT "Home Team" FROM public.raw_sumo UNION
-            SELECT "Away Team" FROM public.raw_sumo UNION
+            SELECT "Home Team", 'Boxing' FROM public.raw_boxing UNION
+            SELECT "Away Team", 'Boxing' FROM public.raw_boxing UNION
+            SELECT "Home Team", 'Sumo' FROM public.raw_sumo UNION
+            SELECT "Away Team", 'Sumo' FROM public.raw_sumo UNION
             
             -- UFC Fighter
-            SELECT "Fighter_A" FROM public.raw_ufc UNION
-            SELECT "Fighter_B" FROM public.raw_ufc
+            SELECT "Fighter_A", 'UFC' FROM public.raw_ufc UNION
+            SELECT "Fighter_B", 'UFC' FROM public.raw_ufc
         ) AS all_competitors
         WHERE name IS NOT NULL 
           AND NOT EXISTS (
             SELECT 1 FROM public.dim_teams dt 
             WHERE dt.team_name = all_competitors.name
+              AND dt.league_name = all_competitors.league
         )
-        ON CONFLICT (team_name) DO NOTHING;
+        ON CONFLICT (team_name, league_name) DO NOTHING;
     """)
     with engine.begin() as conn:
         conn.execute(seed_sql)
