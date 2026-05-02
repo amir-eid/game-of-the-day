@@ -2,7 +2,7 @@
     materialized='table'
 ) }}
 
--- 1. Dimensionen definieren
+-- define dimensions
 with teams as (
     select team_id, team_name, league_name from {{ source('public', 'dim_teams') }}
 ),
@@ -39,7 +39,7 @@ raw_f1_source as (
     from {{ source('public', 'raw_f1') }}
 ),
 
--- Die anderen Quellen (Sumo, NPB, etc.) analog einbinden
+-- add other sources with similar structure, ensuring to cast date and time fields appropriately and to set "Is Playoff" to false if not available
 raw_sumo_source as (
     select "League", "Away Team", "Home Team", "Away Record", "Home Record", 
            "Date"::date, "Time (CET)"::time, "End Time (CET)"::time, "Is Playoff"::boolean 
@@ -82,7 +82,7 @@ base as (
     union all select * from raw_boxing_source
 ),
 
--- 4. IDs via Join hinzufügen
+-- 4. add IDs via Join
 joined_ids as (
     select
         b.*,
@@ -111,7 +111,30 @@ logic as (
 
         case 
             when ("Home Team" = 'Real Madrid' and "Away Team" = 'Barcelona') or ("Home Team" = 'Barcelona' and "Away Team" = 'Real Madrid') then 1
-            -- ... (Restliche Derbies hier)
+            when ("Home Team" = 'Manchester United' and "Away Team" = 'Liverpool') or ("Home Team" = 'Liverpool' and "Away Team" = 'Manchester United') then 1
+            when ("Home Team" = 'Bayern Munich' and "Away Team" = 'Borussia Dortmund') or ("Home Team" = 'Borussia Dortmund' and "Away Team" = 'Bayern Munich') then 1
+            when ("Home Team" = 'AC Milan' and "Away Team" = 'Inter Milan') or ("Home Team" = 'Inter Milan' and "Away Team" = 'AC Milan') then 1
+            when ("Home Team" = 'Juventus' and "Away Team" = 'Torino') or ("Home Team" = 'Torino' and "Away Team" = 'Juventus') then 1
+            when ("Home Team" = 'Paris Saint-Germain' and "Away Team" = 'Olympique de Marseille') or ("Home Team" = 'Olympique de Marseille' and "Away Team" = 'Paris Saint-Germain') then 1
+            when ("Home Team" = 'New York Yankees' and "Away Team" = 'Boston Red Sox') or ("Home Team" = 'Boston Red Sox' and "Away Team" = 'New York Yankees') then 1
+            when ("Home Team" = 'Miami Heat' and "Away Team" = 'Boston Celtics') or ("Home Team" = 'Boston Celtics' and "Away Team" = 'Miami Heat') then 1
+            when ("Home Team" = 'Los Angeles Dodgers' and "Away Team" = 'San Diego Padres') or ("Home Team" = 'San Diego Padres' and "Away Team" = 'Los Angeles Dodgers') then 1
+            when ("Home Team" = 'Arsenal' and "Away Team" = 'Tottenham Hotspur') or ("Home Team" = 'Tottenham Hotspur' and "Away Team" = 'Arsenal') then 1
+            when ("Home Team" = 'Manchester City' and "Away Team" = 'Manchester United') or ("Home Team" = 'Manchester United' and "Away Team" = 'Manchester City') then 1
+            when ("Home Team" = 'Chelsea' and "Away Team" = 'Arsenal') or ("Home Team" = 'Arsenal' and "Away Team" = 'Chelsea') then 1
+            when ("Home Team" = 'Borussia Dortmund' and "Away Team" = 'Schalke 04') or ("Home Team" = 'Schalke 04' and "Away Team" = 'Borussia Dortmund') then 1
+            when ("Home Team" = 'Real Madrid' and "Away Team" = 'Atletico Madrid') or ("Home Team" = 'Atletico Madrid' and "Away Team" = 'Real Madrid') then 1
+            when ("Home Team" = 'Liverpool' and "Away Team" = 'Everton') or ("Home Team" = 'Everton' and "Away Team" = 'Liverpool') then 1
+            when ("Home Team" = 'Barcelona' and "Away Team" = 'Real Madrid') or ("Home Team" = 'Real Madrid' and "Away Team" = 'Barcelona') then 1
+            when ("Home Team" = 'Partizan' and "Away Team" = 'Crvena zvezda') or ("Home Team" = 'Crvena zvezda' and "Away Team" = 'Partizan') then 1
+            when ("Home Team" = 'Fenerbahce' and "Away Team" = 'Galatasaray') or ("Home Team" = 'Galatasaray' and "Away Team" = 'Fenerbahce') then 1
+            when ("Home Team" = 'Fenerbahce' and "Away Team" = 'Besiktas') or ("Home Team" = 'Besiktas' and "Away Team" = 'Fenerbahce') then 1
+            when ("Home Team" = 'Galatasaray' and "Away Team" = 'Besiktas') or ("Home Team" = 'Besiktas' and "Away Team" = 'Galatasaray') then 1
+            when ("Home Team" = 'Borussia Dortmund' and "Away Team" = 'Bayern Munich') or ("Home Team" = 'Bayern Munich' and "Away Team" = 'Borussia Dortmund') then 1
+            when ("Home Team" = 'Boca Juniors' and "Away Team" = 'River Plate') or ("Home Team" = 'River Plate' and "Away Team" = 'Boca Juniors') then 1
+            when ("Home Team" = 'Celtic' and "Away Team" = 'Rangers') or ("Home Team" = 'Rangers' and "Away Team" = 'Celtic') then 1
+            when ("Home Team" = 'St. Pauli' and "Away Team" = 'Hamburg SV') or ("Home Team" = 'Hamburg SV' and "Away Team" = 'St. Pauli') then 1
+            when ("Home Team" = 'AS Roma' and "Away Team" = 'Lazio') or ("Home Team" = 'Lazio' and "Away Team" = 'AS Roma') then 1
             else 0 
         end as is_derby_game,
 
@@ -163,7 +186,7 @@ calculated_scores as (
     from logic
 )
 
--- 6. Finales SELECT mit dem korrekten Zeitfilter
+-- 6. Final SELECT 
 select
     league_id_new,
     home_team_id_new,
@@ -175,7 +198,7 @@ select
     case when "Is Playoff" = true then '🏆 Playoff ' else '' end as tags
 from calculated_scores
 where 
-    -- Datums-Filter (Heute und Morgen früh)
+    -- Date-Filter (Today and tomorrow morning)
     (
         "Date" = (CURRENT_TIMESTAMP AT TIME ZONE 'EUROPE/VIENNA')::date
         or
@@ -184,6 +207,6 @@ where
             and "Time (CET)" < '05:00'
         )
     )
-    -- Zeit-Filter (Keine Spiele zwischen 02:00 und 10:00 morgens)
+    -- no games between 2:00 and 10:00 am
     and ("Time (CET)" < '02:00' or "Time (CET)" > '10:00')
 order by total_watch_score desc

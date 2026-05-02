@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, text
 import pytz
 import sys
 
-# ── Leagues to fetch ──────────────────────────────────────────────────────────
+# ── Leagues to fetch 
 LEAGUES = [
     ('basketball', 'nba',                     'NBA'),
     ('football',   'nfl',                     'NFL'),
@@ -50,9 +50,6 @@ LEAGUES = [
     ('soccer',     'jpn.1',                   'J1 League'),
     ('soccer',     'conmebol.libertadores',   'Copa Libertadores'),
     ('soccer',     'fifa.friendly',           'International Friendlies'),
-
-
-
 ]
 
 # ── Average game durations (hours) ───────────────────────────────────────────
@@ -228,10 +225,13 @@ def fetch_boxing_task():
     print("🥊 Fetching curated Boxing matches via SerpApi...")
     api_key = os.getenv("SERPAPI_KEY")
     
-    # Hier deine Favoriten eintragen (Teile des Namens reichen)
+    # Add favorite boxers to filter the results (you can customize this list)
     my_boxers = [
-        'Canelo', 'Usyk', 'Fury', 'Joshua', 'Inoue', 'Crawford', 
-        'Davis', 'Haney', 'Bivol', 'Garcia', 'Loma', 'Wilder'
+    'Canelo', 'Usyk', 'Fury', 'Joshua', 'Inoue', 'Crawford', 
+    'Davis', 'Haney', 'Bivol', 'Garcia', 'Loma', 'Wilder',
+    'Beterbiev', 'Bam Rodriguez', 'Shakur Stevenson', 'Nakatani', 
+    'Teofimo Lopez', 'Pitbull Cruz', 'Boots Ennis', 'Vergil Ortiz', 
+    'Zhilei Zhang', 'Beterbiev', 'Fundora', 'Mbilli'
     ]
     
     params = {
@@ -353,7 +353,6 @@ def fetch_sumo_task():
     basho_id = f"{year}{month:02d}"
     
     try:
-        
         basho_info_res = requests.get(f"https://www.sumo-api.com/api/basho/{basho_id}")
         if basho_info_res.status_code != 200:
             return pd.DataFrame()
@@ -365,7 +364,7 @@ def fetch_sumo_task():
         day_diff = (now - start_date).days + 1
         
         if not (1 <= day_diff <= 15):
-            print(f"⏳ Basho {basho_id} geplant, aber heute ist nicht Turniertag 1-15 (Tag: {day_diff}).")
+            print(f"⏳ Basho {basho_id} planned, but today is not a tournament day (1-15) (Day: {day_diff}).")
             return pd.DataFrame()
 
         print(f"⭐ Fetching Bouts for Basho {basho_id}, Day {day_diff}...")
@@ -496,8 +495,6 @@ def dbt_transform_task():
     try:
         result = subprocess.run(
             ['dbt', 'run', '--project-dir', '/app/sports_transform', '--profiles-dir', '/app/sports_transform'],
-            #cwd=project_dir, 
-            #check=True,
             capture_output=True,
             text=True
         )
@@ -558,8 +555,8 @@ def update_history_and_display_task():
     print("\n🏆 UPDATING HISTORY & NOTIFYING DISCORD 🏆")
     
     with engine.begin() as conn:
-        # Der 'Smart Upsert': Fügt neue Spiele ein, aktualisiert Scores,
-        # aber lässt die Spalte 'watched' bei bestehenden Zeilen unberührt.
+        # This query ensures we only keep the highest scoring matchup per date and team combination,
+        #  preventing duplicates and ensuring the most relevant game is highlighted.
         conn.execute(text("""
             WITH unique_source AS (
                 SELECT DISTINCT ON ("Date"::date, home_team_id_new, away_team_id_new)
@@ -595,7 +592,7 @@ def update_history_and_display_task():
                 league_id_new = EXCLUDED.league_id_new;
         """))
 
-        # Top 10 für die Logs ziehen
+        # Top 10 for logs
         query = f"""
             SELECT 
                 score,
@@ -618,9 +615,9 @@ def update_history_and_display_task():
 
     if webhook_url:
         discord_msg = (
-            "🚀 **Der neue Spielplan ist live!**\n\n"
-            f"Heute warten **{len(df)} Top-Spiele** auf dich.\n"
-            "Schau dir die Details im Dashboard an:\n"
+            "🚀 **The new game plan is live!**\n\n"
+            f"There are waiting **{len(df)} games** for you.\n"
+            "Check the details on the dashboard:\n"
             f"👉 {dashboard_url}"
         )
         try:
@@ -656,12 +653,12 @@ def sports_flow():
     update_history_and_display_task()
 
 if __name__ == "__main__":
-    # Wenn "oneshot" als Argument übergeben wird, läuft es nur einmal (für GitHub)
+    # Oneshot mode for local testing: `python run_pipeline.py --oneshot`
     if "--oneshot" in sys.argv:
         print("🚀 Running in One-Shot mode...")
         sports_flow()
     else:
-        # Dein bisheriger lokaler Scheduler für das MacBook
+        # Scheduler mode: Run every day at 11:00 CET (when most games are known and before evening games start)
         print("⏰ Running in Scheduler mode (Local)...")
         schedule.every().day.at("11:00").do(sports_flow)
         while True:
