@@ -642,8 +642,8 @@ def auto_seed_teams_task():
             SELECT "Away Team", 'NPB' FROM public.raw_npb UNION
             
             -- Eurobasket / EuroLeague
-            SELECT "Home Team", 'Eurobasket' FROM public.raw_eurobasket UNION
-            SELECT "Away Team", 'Eurobasket' FROM public.raw_eurobasket UNION
+            SELECT "Home Team" AS name, "League" AS league FROM public.raw_eurobasket UNION
+            SELECT "Away Team", "League" FROM public.raw_eurobasket UNION
             
             -- Boxer & Sumo-Ringer
             SELECT "Home Team", 'Boxing' FROM public.raw_boxing UNION
