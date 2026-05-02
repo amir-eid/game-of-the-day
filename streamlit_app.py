@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 import os  
 from datetime import datetime
 
-# --- KONFIGURATION ---
+# congiguration
 st.set_page_config(page_title="Sports Watcher Dashboard", layout="wide")
 st.title("🏆 Sports Watcher Dashboard")
 
@@ -13,7 +13,7 @@ st.title("🏆 Sports Watcher Dashboard")
 @st.cache_data(ttl=3600)
 def load_data():
     if "SUPABASE_DB_URL" not in st.secrets:
-        st.error("Bitte SUPABASE_DB_URL in den Streamlit Secrets hinterlegen!")
+        st.error("Add SUPABASE_DB_URL in Streamlit Secrets!")
         return pd.DataFrame()
         
     db_url = st.secrets["SUPABASE_DB_URL"]
@@ -24,7 +24,7 @@ def load_data():
         df = pd.read_sql(query, engine)
         return df
     except Exception as e:
-        st.error(f"Fehler beim Laden der Daten: {e}")
+        st.error(f"Error loading data: {e}")
         return pd.DataFrame()
 
 try:
