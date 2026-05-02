@@ -4,7 +4,7 @@
 
 -- 1. Dimensionen definieren
 with teams as (
-    select team_id, team_name from {{ source('public', 'dim_teams') }}
+    select team_id, team_name, league_name from {{ source('public', 'dim_teams') }}
 ),
 leagues as (
     select league_id, league_name from {{ source('public', 'dim_leagues') }}
