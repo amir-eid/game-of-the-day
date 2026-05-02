@@ -99,7 +99,7 @@ joined_ids as (
         and b."League" = t_away.league_name
 ),
 
--- 5. Scoring Logik
+-- 5. Scoring Logic
 logic as (
     select
         *,
@@ -136,7 +136,22 @@ calculated_scores as (
         *,
         case 
             when "League" = 'NFL' then 50 when "League" = 'NBA' then 25 when "League" = 'UFC' then 5 when "League" = 'F1' then 10
-            -- ... (Restliche League Points)
+            when "League" = 'MLB' then 20 when "League" = 'ESP.1' then 15 when "League" = 'Olympic Ice Hockey' then 25 
+            when "League" = 'World Baseball Classic' then 40 when "League" = 'NHL' then 12 when "League" = 'ENG.1' then 15
+            when "League" = 'College Basketball' then 10 when "League" = 'College Football' then 10 when "League" = 'NPB' then 5
+            when "League" = 'GER.1' then 8 when "League" = 'FRA.1' then 7 when "League" = 'FIBA World Cup' then 5 
+            when "League" = 'ITA.1' then 6 when "League" = 'UEFA Champions League' then 17 when "League" = 'Sumo' then 20
+            when "League" = 'UEFA Europa League' then 5 when "League" = 'UEFA Conference League' then 3 
+            when "League" = 'FIFA World Cup' then 50 when "League" = 'UEFA European Championship' then 50
+            when "League" = 'UEFA European Championship Qualifiers' then 20 when "League" = 'FA Cup' then 5
+            when "League" = 'Copa del Rey' then 3 when "League" = 'Eredivisie' then 3 when "League" = 'Olympics Basketball' then 16
+            when "League" = 'Portuguese Primeira Liga' then 3 when "League" = 'Russian Premier League' then 3 
+            when "League" = 'Austrian Bundesliga' then 5 when "League" = 'Turkish Süper Lig' then 3 when "League" = 'Africa Cup of Nations' then 30
+            when "League" = 'Africa Cup of Nations Qualifiers' then 5 when "League" = 'Copa America' then 10 when "League" = 'UEFA Nations League' then 5
+            when "League" = 'Olympic Football Tournament' then 3 when "League" = 'FIFA World Cup Qualifiers - UEFA' then 10
+            when "League" = 'FIFA World Cup Qualifiers - CAF' then 8 when "League" = 'J1 League' then 1 when "League" = 'Copa Libertadores' then 2
+            when "League" = 'International Friendlies' then 4 when "League" = 'EuroLeague' then 2 when "League" = 'ABA' then 1 when "League" = 'Boxing' then 10
+
             else 0
         end as league_pts,
         

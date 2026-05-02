@@ -1,7 +1,6 @@
 import os
 from dotenv import load_dotenv
 from prefect import flow, task
-import duckdb
 import requests
 from datetime import datetime
 import pandas as pd
@@ -279,36 +278,7 @@ def fetch_boxing_task():
     except Exception as e:
         print(f"❌ Boxing Filter Error: {e}")
         return pd.DataFrame()
-    
-#def generic_save_to_duckdb(df, table_name):
- #   con = duckdb.connect('sports.duckdb')
-  #  if df is None or df.empty:
-   #     con.execute(f"""
-    #        CREATE TABLE IF NOT EXISTS {table_name} (
-     #           "League" VARCHAR,
-      #          "Away Team" VARCHAR,
-       #         "Home Team" VARCHAR, 
-        #        "Away Record" VARCHAR,
-         #       "Home Record" VARCHAR, 
-          #      Date VARCHAR,
-           #     "Time (CET)" VARCHAR,
-            #    "End Time (CET)" VARCHAR, 
-             #   "Is Playoff" BOOLEAN
-            #)
-        #""")
-    #else:
-     #   con.execute(f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM df")
-    #con.close()
 
-#@task(name="Save Basketball to DuckDB")
-#def save_basketball_to_duckdb(df):
- #   generic_save_to_duckdb(df, "raw_eurobasket")
-
-#@task(name="Save Boxing to DuckDB")
-#def save_boxing_to_duckdb(df):
- #   generic_save_to_duckdb(df, "raw_boxing")
-
-#@task(retries=3, retry_delay_seconds=60)
 def fetch_npb_task():
     """Fetch real NPB matchups via SerpApi."""
     print("🛰️ Fetching live NPB matchups via SerpApi...")
@@ -362,39 +332,6 @@ def fetch_npb_task():
     except Exception as e:
         print(f"❌ SerpApi Error: {e}")
         return pd.DataFrame()
-
-#@task(name="Save NPB to DuckDB")
-#def save_npb_to_duckdb(df):
- #   """Save NPB games in DuckDB table 'raw_npb'."""
-  #  db_path = 'sports.duckdb'
-   # con = duckdb.connect(db_path)
-    
-    #try:
-     #   if df is None or df.empty:
-      #      print("No NPB data found. Initialize empty table for dbt...")
-       #     con.execute("""
-        #        CREATE TABLE IF NOT EXISTS raw_npb (
-         #           "League" VARCHAR,
-          #          "Away Team" VARCHAR,
-           #         "Home Team" VARCHAR,
-            #        "Away Record" VARCHAR,
-             #       "Home Record" VARCHAR,
-              #      "Date" VARCHAR,
-               #     "Time (CET)" VARCHAR,
-                #    "End Time (CET)" VARCHAR,
-                 #   "Is Playoff" BOOLEAN
-                #)
-            #""")
-        #else:
-            # Saves real data and overwrites old table
-         #   con.execute("CREATE OR REPLACE TABLE raw_npb AS SELECT * FROM df")
-          #  count = con.execute("SELECT count(*) FROM raw_npb").fetchone()[0]
-           # print(f"Success: {count} NPB-Matchups saved in DuckDB.")
-            
-    #except Exception as e:
-     #   print(f"Error saving NPB games in DuckDB: {e}")
-    #finally:
-     #   con.close()
 
 @task(retries=2, retry_delay_seconds=60)
 def fetch_sumo_task():
@@ -499,41 +436,6 @@ def fetch_f1_task():
         print(f"Error Scraping F1: {e}")
         return pd.DataFrame()
 
-#@task(name="Save Sumo to DuckDB")
-#def save_sumo_to_duckdb(df):
- #   db_path = 'sports.duckdb'
-  #  con = duckdb.connect(db_path)
-    
-   # if df is None or df.empty:
-    #    print("No sumo month. Initialize empty table for dbt...")
-
-     #   con.execute("""
-      #      CREATE TABLE IF NOT EXISTS raw_sumo (
-       #         "League" VARCHAR,
-        #        "Away Team" VARCHAR,
-         #       "Home Team" VARCHAR,
-          #      "Away Record" VARCHAR,
-           #     "Home Record" VARCHAR,
-            #    "Date" VARCHAR,
-             #   "Time (CET)" VARCHAR,
-              #  "End Time (CET)" VARCHAR,
-               # "Is Playoff" BOOLEAN
-            #)
-        #""")
-    #else:
-     #   con.execute("CREATE OR REPLACE TABLE raw_sumo AS SELECT * FROM df")
-      #  print(f"{len(df)} Sumo Bashos saved in DuckDB.")
-    
-    #con.close()
-#@task
-#def save_f1_to_duckdb(df):
- #   if df.empty:
-  #      print("No F1 events found for today. Skipping DuckDB save.")
-   #     return
-   # con = duckdb.connect('sports.duckdb')
-    #con.execute("CREATE OR REPLACE TABLE raw_f1 AS SELECT * FROM df")
-    #con.close()
-
 @task(retries=3, retry_delay_seconds=60)
 def fetch_ufc_task():
 
@@ -573,16 +475,6 @@ def fetch_ufc_task():
         print(f"Error scraping UFC data {e}")
         return pd.DataFrame()
 
-#@task
-#def save_ufc_to_duckdb(df):
- #   if df.empty:
-  #      print("No UFC fights found for today. Skipping DuckDB save.")
-   #     return
-    #print(f"💾 Save {len(df)} UFC fights in DuckDB...")
-    #con = duckdb.connect('sports.duckdb')
-    #con.execute("CREATE OR REPLACE TABLE raw_ufc AS SELECT * FROM df")
-    #con.close()
-
 def fetch_all_leagues():
     """Fetch today's games for all configured leagues."""
 
@@ -597,19 +489,10 @@ def scrape_task():
     print("🛰️  Scraping ESPN for today's games...")
     return fetch_all_leagues()
 
-#@task
-#def save_to_duckdb_task(df):
- #   print("💾 Saving raw data to DuckDB...")
-  #  con = duckdb.connect('sports.duckdb')
-   # con.execute("CREATE OR REPLACE TABLE raw_games AS SELECT * FROM df")
-    #con.close()
-
 @task
 def dbt_transform_task():
     print("🚀 Triggering dbt transformation...")
 
-    #project_dir = "sports_transform"
-    #profiles_dir = ".."
     try:
         result = subprocess.run(
             ['dbt', 'run', '--project-dir', '/app/sports_transform', '--profiles-dir', '/app/sports_transform'],
@@ -633,7 +516,7 @@ def auto_seed_teams_task():
         INSERT INTO public.dim_teams (team_name, league_name)
         SELECT DISTINCT name, league
         FROM (
-            -- Klassische Teams aus raw_games (ESPN)
+            -- Usual teams from raw_games (ESPN)
             SELECT "Home Team" AS name, "League" AS league FROM public.raw_games UNION
             SELECT "Away Team", "League" FROM public.raw_games UNION
             
@@ -641,17 +524,17 @@ def auto_seed_teams_task():
             SELECT "Home Team", 'NPB' FROM public.raw_npb UNION
             SELECT "Away Team", 'NPB' FROM public.raw_npb UNION
             
-            -- Eurobasket / EuroLeague
+            -- Eurobasket
             SELECT "Home Team" AS name, "League" AS league FROM public.raw_eurobasket UNION
             SELECT "Away Team", "League" FROM public.raw_eurobasket UNION
             
-            -- Boxer & Sumo-Ringer
+            -- Boxing & Sumo
             SELECT "Home Team", 'Boxing' FROM public.raw_boxing UNION
             SELECT "Away Team", 'Boxing' FROM public.raw_boxing UNION
             SELECT "Home Team", 'Sumo' FROM public.raw_sumo UNION
             SELECT "Away Team", 'Sumo' FROM public.raw_sumo UNION
             
-            -- UFC Fighter
+            -- UFC 
             SELECT "Fighter_A", 'UFC' FROM public.raw_ufc UNION
             SELECT "Fighter_B", 'UFC' FROM public.raw_ufc
         ) AS all_competitors
@@ -748,13 +631,6 @@ def update_history_and_display_task():
 
     return df
 
-#@task
-#def notify_dashboard_sync():
- #   db_path = 'sports.duckdb'
-  #  if os.path.exists(db_path):
-   #     os.utime(db_path, None)
-    #    print("Dashboard notified: New dbt data detected.")
-
 @flow(name="Sports Data Pipeline", log_prints=True)
 def sports_flow():
     #scraping
@@ -778,7 +654,6 @@ def sports_flow():
     #transformation & display
     dbt_transform_task()
     update_history_and_display_task()
-    #notify_dashboard_sync()
 
 if __name__ == "__main__":
     # Wenn "oneshot" als Argument übergeben wird, läuft es nur einmal (für GitHub)
