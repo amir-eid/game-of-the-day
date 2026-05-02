@@ -1,81 +1,73 @@
-# 🏆 Game of the Day: Sports Analytics Pipeline
+# 🏆 Sports Watcher Dashboard: Analytics Pipeline
 
-An automated data pipeline that scrapes daily sports schedules from different sources, ranks games based on a custom "watchability" algorithm, and sends the top picks directly to Discord. Shows top headlines for top games of the day.
+An automated data pipeline that aggregates daily sports schedules from various sources, ranks them using a weighted "watchability" algorithm, and provides top picks alongside personalized news headlines in an interactive dashboard.
 
-## 🚀 Overview
-This project is designed to solve the "What should I watch today?" problem for sports fans. It handles everything from raw data extraction to final mobile notifications.
-
-### The Tech Stack
-* **Orchestration:** [Prefect](https://www.prefect.io/) (Scheduled runs & task monitoring)
-* **Transformation:** [dbt](https://www.getdbt.com/) (SQL-based business logic & scoring)
-* **Database:** [DuckDB](https://duckdb.org/) (Fast, local analytical database)
-* **Notifications:** **Discord Webhooks** (Mobile alerts)
-* **Dashboard:** **Streamlit**
-* **Language:** Python 3.x
+## 🚀 Architecture Update
+The project has been migrated from a local DuckDB solution to a scalable cloud infrastructure:
+*   **Database:** **Supabase (PostgreSQL)** serves as the central data warehouse.
+*   **Orchestration:** **GitHub Actions** handles daily scraping tasks and dbt transformations.
+*   **Transformation:** **dbt (data build tool)** manages SQL-based scoring and team mapping.
+*   **Dashboard:** **Streamlit Cloud** provides real-time visualization and news integration.
+*   **News Scouting:** **SerpApi** (Google News) fetches context-aware headlines for the day's top matchups.
 
 ---
 
-## 🛠️ Pipeline Architecture
-1.  **Scrape:** Extracts daily game data (Leagues, Matchups, Times, Odds).
-2.  **Load:** Ingests raw JSON/CSV data into a local `sports.duckdb` instance.
-3.  **Transform (dbt):**
-    * Cleans team names and timestamps.
-    * Calculates a `total_watch_score` based on preferred leagues, sports, teams and rivalries.
-    * Filters for "Favorites" and "Derby" matches.
-4.  **Notify:** Queries the final dbt models and pushes the Top 10 games to a Discord channel.
+## 🛠️ Tech Stack
+*   **Python 3.x:** Core logic and web scraping.
+*   **SQL / dbt:** Calculation of the `total_watch_score`.
+*   **SQLAlchemy:** Connection bridge between Streamlit and the Supabase instance.
+*   **Feedparser:** Integration of RSS feeds for the "Scouting Report" tab.
 
 ---
 
-## ⚙️ Setup & Installation
+## ⚙️ Pipeline Workflow
+1.  **Ingest:** Python scripts (triggered via GitHub Actions) load raw data into `public.raw_...` tables in Supabase.
+2.  **Transform (dbt):** 
+    *   Cleanses team names and timestamps.
+    *   Maps team names to IDs in `dim_teams`.
+    *   Calculates `league_pts` and `favorite_pts`.
+3.  **Serve:** A PostgreSQL view (`v_dashboard_top_picks`) provides the final, scored dataset.
+4.  **Visualize:** The Streamlit dashboard allows filtering by league and dynamically generates news reports via SerpApi.
+
+---
+
+## 💻 Setup & Installation
 
 ### 1. Environment Variables
-To keep sensitive data secure, this project uses a `.env` file. Create one in the root directory:
+Store the following secrets in Streamlit Cloud and your GitHub Repository Secrets:
 ```text
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+SUPABASE_DB_URL=postgresql://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres
+SERPAPI_KEY=your_api_key_here
 ```
 
-### 2. Install Dependencies
+### 2. Database Initialization
+The table structure is managed by dbt. Run the following to generate tables and views:
 ```bash
-pip install -r requirements.txt
+dbt run
 ```
 
-### 3. Initialize dbt
-Ensure your `profiles.yml` is configured to point to `sports.duckdb`, then verify the connection:
+### 3. Run Dashboard Locally
 ```bash
-dbt debug
+streamlit run streamlit_app.py
 ```
 
 ---
 
-## 🏃 Running the Pipeline
-
-### Manual Run
-To execute the entire flow immediately:
-```bash
-python run_pipeline.py
-```
-
-### Scheduled Serving (Prefect)
-To keep the pipeline "listening" for scheduled runs (e.g., every morning at 11:00 AM):
-```bash
-# This will serve the flow on your local machine
-python run_pipeline.py --serve
-```
+## 📊 Scoring Logic
+The core of the dashboard is the `total_watch_score`, which is calculated based on:
+*   **League Weight:** NFL (50), NBA (25), World Cup (50), etc.
+*   **Personal Favorites:** High-interest teams (e.g., Miami Heat, Valencia, San Diego Padres) receive bonus points.
+*   **Match Status:** Extra points for Derbies and Playoff games.
+*   **Time Bonus:** Games during Prime Time (CET) are weighted higher.
 
 ---
 
-## 📊 Database Schema
-* `raw_schedule`: The landing zone for scraped data.
-* `fct_daily_schedule`: The final analytical table produced by dbt.
-* `watched_history`: A persistent table tracking every game recommended over time to avoid duplicates and track performance.
+## 🗺️ Roadmap
+- [x] Migration from DuckDB to Supabase Cloud.
+- [x] Automation via GitHub Actions.
+- [ ] Implementation of an ML model to predict "must-watch" matchups based on watch history.
 
 ---
 
-## 🛡️ Security Note
-The `.env` file, `sports.duckdb`, and `logs/` are explicitly excluded from the repository via `.gitignore` to protect webhook credentials and prevent large binary files from bloating the version history.
-
-## Roadmap
-
-- [ ] PowerBI dashboard to visualize daily recommendations
-- [ ] Compare recommendations vs. games actually watched
-- [ ] ML model to learn from watch history and improve recommendations over time
+## 🛡️ Security
+The `.env` file and dbt profiles are excluded via `.gitignore`. The connection to Supabase is encrypted using SSL (`sslmode=require`).
