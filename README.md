@@ -65,6 +65,7 @@ The core of the dashboard is the `total_watch_score`, which is calculated based 
 ## 🗺️ Roadmap
 - [x] Migration from DuckDB to Supabase Cloud.
 - [x] Automation via GitHub Actions.
+- [ ] Implementation of different pipelines for early games and later games. 
 - [ ] Implementation of an ML model to predict "must-watch" matchups based on watch history.
 
 ---
