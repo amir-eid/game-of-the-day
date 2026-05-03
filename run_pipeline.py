@@ -659,9 +659,9 @@ if __name__ == "__main__":
         print("🚀 Running in One-Shot mode...")
         sports_flow()
     else:
-        # Scheduler mode: Run every day at 11:00 CET (when most games are known and before evening games start)
+        # Scheduler mode: Run every day at 12:30 CET
         print("⏰ Running in Scheduler mode (Local)...")
-        schedule.every().day.at("11:00").do(sports_flow)
+        schedule.every().day.at("12:30").do(sports_flow)
         while True:
             schedule.run_pending()
             time.sleep(1)
