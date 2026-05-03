@@ -23,7 +23,7 @@ jobs:
           pip install dbt-postgres
       - name: Run dbt Transformations
         env:
-          # dbt braucht diese Secrets, um sich mit Supabase zu verbinden
+          # dbt needs these secrets to connect with Supabase
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }} 
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
