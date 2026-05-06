@@ -2,7 +2,7 @@ name: Sports Data Pipeline
 
 on:
   schedule:
-    - cron: '30 10 * * *'
+    - cron: '15 9 * * *'
   workflow_dispatch: 
 
 jobs:
