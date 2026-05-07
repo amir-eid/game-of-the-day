@@ -1,6 +1,5 @@
 requests
 pandas
-duckdb
 dbt-postgres
 streamlit
 prefect
@@ -11,4 +10,3 @@ schedule
 psycopg2-binary
 sqlalchemy
 python-dotenv
-matplotlib
