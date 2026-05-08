@@ -88,7 +88,15 @@ joined_ids as (
         b.*,
         l.league_id as league_id_new,
         t_home.team_id as home_team_id_new,
-        t_away.team_id as away_team_id_new
+        t_away.team_id as away_team_id_new,
+        CASE 
+            WHEN b."League" = 'F1' THEN 999
+            ELSE t_home.team_id 
+        END as home_team_id_new,
+        CASE 
+            WHEN b."League" = 'F1' THEN 998
+            ELSE t_away.team_id 
+        END as away_team_id_new
     from base b
     left join leagues l on b."League" = l.league_name
     left join teams t_home 

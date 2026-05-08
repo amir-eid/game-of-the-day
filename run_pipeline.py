@@ -408,7 +408,7 @@ def fetch_f1_task():
     now = datetime.now(vienna_tz)
     today_str = now.strftime('%Y-%m-%d')
     api_date = now.strftime('%Y%m%d')
-    url = f"http://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard?dates={api_date}"
+    url = f"https://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard?dates={api_date}"
     
     try:
         response = requests.get(url)
@@ -444,7 +444,7 @@ def fetch_ufc_task():
     today_dash = datetime.now(vienna_tz).strftime('%Y-%m-%d')
 
     print(f"Fetching UFC events for {today_str}")
-    url = f"http://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates={today_str}"
+    url = f"https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates={today_str}"
 
 
     try:
