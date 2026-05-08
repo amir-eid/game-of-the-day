@@ -638,18 +638,22 @@ def sports_flow():
     eurobasket_df = fetch_basketball_task()
     boxing_df = fetch_boxing_task()
     #saving  
-    save_to_supabase_task(raw_df)
-    save_ufc_to_supabase(ufc_df)
-    save_f1_to_supabase(f1_df)
-    save_sumo_to_supabase(sumo_df)
-    save_npb_to_supabase(npb_df)
-    save_basketball_to_supabase(eurobasket_df)
-    save_boxing_to_supabase(boxing_df)
+    save_raw = save_to_supabase_task(raw_df)
+    save_ufc = save_ufc_to_supabase(ufc_df)
+    save_f1 = save_f1_to_supabase(f1_df)
+    save_sumo = save_sumo_to_supabase(sumo_df)
+    save_npb = save_npb_to_supabase(npb_df)
+    save_basketball = save_basketball_to_supabase(eurobasket_df)
+    save_boxing = save_boxing_to_supabase(boxing_df)
 
-    auto_seed_teams_task()  
+
+    seed = auto_seed_teams_task(wait_for=[
+        save_raw, save_ufc, save_f1, 
+        save_sumo, save_npb, save_basketball, save_boxing
+    ])  
     #transformation & display
-    dbt_transform_task()
-    update_history_and_display_task()
+    dbt = dbt_transform_task(wait_for=[seed])
+    update_history_and_display_task(wait_for=[dbt])
 
 if __name__ == "__main__":
     # Oneshot mode for local testing: `python run_pipeline.py --oneshot`
