@@ -663,7 +663,7 @@ if __name__ == "__main__":
     else:
         # Scheduler mode: Run every day at 12:30 CET
         print("⏰ Running in Scheduler mode (Local)...")
-        schedule.every().day.at("11:15").do(sports_flow)
+        schedule.every().day.at("12:15").do(sports_flow)
         while True:
             schedule.run_pending()
             time.sleep(1)
