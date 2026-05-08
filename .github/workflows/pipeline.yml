@@ -53,6 +53,9 @@ jobs:
               f.write(content)
           print("profiles.yml created successfully")
           PYEOF
+      
+      - name: Debug profiles.yml
+        run: cat sports_transform/profiles.yml
 
       - name: Run dbt Transformations
         env:
