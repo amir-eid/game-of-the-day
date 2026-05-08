@@ -193,7 +193,8 @@ def fetch_basketball_task():
     print("🏀 Fetching Basketball (EuroLeague & ABA) via SerpApi...")
     api_key = os.getenv("SERPAPI_KEY")  
     
-    queries = ["EuroLeague schedule today", "ABA Liga schedule today"]
+    queries = ["EuroLeague schedule today", "ABA Liga schedule today", "EuroLeague playoffs 2026 today",
+               "ABA Liga playoffs 2026 today", "EuroLeague game today score", "ABA Liga game today score"]
     all_baskets = []
     
     for q in queries:
@@ -359,8 +360,7 @@ def fetch_sumo_task():
             return pd.DataFrame()
             
         start_date_str = basho_info_res.json().get('startDate') 
-        start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
-        
+        start_date = datetime.strptime(start_date_str.split('T')[0], '%Y-%m-%d')        
         
         day_diff = (now - start_date).days + 1
         
