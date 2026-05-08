@@ -21,6 +21,7 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install dbt-postgres
+
       - name: Debug
         env:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
@@ -31,29 +32,8 @@ jobs:
         env:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
-          python - <<'PYEOF'
-          import os
-          password = os.environ['DB_PASSWORD']
-          content = f"""sports_transform:
-            target: dev
-            outputs:
-              dev:
-                type: postgres
-                host: aws-1-eu-central-1.pooler.supabase.com
-                user: postgres.agvurhyxkmhwjhohsbzb
-                password: "{password}"
-                port: 5432
-                dbname: postgres
-                schema: public
-                threads: 1
-                search_path: public
-                sslmode: require
-          """
-          with open('sports_transform/profiles.yml', 'w') as f:
-              f.write(content)
-          print("profiles.yml created successfully")
-          PYEOF
-      
+          printf 'sports_transform:\n  target: dev\n  outputs:\n    dev:\n      type: postgres\n      host: aws-1-eu-central-1.pooler.supabase.com\n      user: postgres.agvurhyxkmhwjhohsbzb\n      password: "%s"\n      port: 5432\n      dbname: postgres\n      schema: public\n      threads: 1\n      search_path: public\n      sslmode: require\n' "$DB_PASSWORD" > sports_transform/profiles.yml
+
       - name: Debug profiles.yml
         run: cat sports_transform/profiles.yml
 
