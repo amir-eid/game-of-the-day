@@ -7,4 +7,19 @@ models:
       - name: total_watch_score
         description: "The calculated interest score based on favorites, records, and leagues."
         data_tests:
-          - not_null  # dbt will alert you if a game is missing a score!
+          - not_null 
+      - name: League
+        data_tests:
+          - not_null
+      - name: Date
+        data_tests:
+          - not_null
+      - name: Time (CET)
+        data_tests:
+          - not_null
+      - name: Home Team
+        data_tests:
+          - not_null
+      - name: Away Team
+        data_tests:
+          - not_null
