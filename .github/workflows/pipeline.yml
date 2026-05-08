@@ -21,14 +21,34 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install dbt-postgres
+
+      - name: Create dbt profiles.yml
+        run: |
+          cat > sports_transform/profiles.yml << EOF
+          sports_transform:
+            target: dev
+            outputs:
+              dev:
+                type: postgres
+                host: aws-1-eu-central-1.pooler.supabase.com
+                user: postgres.agvurhyxkmhwjhohsbzb
+                password: "${{ secrets.DB_PASSWORD }}"
+                port: 5432
+                dbname: postgres
+                schema: public
+                threads: 1
+                search_path: public
+                sslmode: require
+          EOF
+
       - name: Run dbt Transformations
         env:
-          # dbt needs these secrets to connect with Supabase
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }} 
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           cd sports_transform
           dbt run --target dev --profiles-dir .
+
       - name: Run Pipeline
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
