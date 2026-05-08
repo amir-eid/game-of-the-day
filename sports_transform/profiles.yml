@@ -5,7 +5,7 @@ sports_transform:
       type: postgres
       host: aws-1-eu-central-1.pooler.supabase.com
       user: postgres.agvurhyxkmhwjhohsbzb
-      password: "{{ env_var('DB_PASSWORD') }}"
+      password: "toZShQshNDVV4DW"
       port: 5432
       dbname: postgres
       schema: public 
