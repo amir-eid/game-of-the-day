@@ -23,27 +23,35 @@ jobs:
           pip install dbt-postgres
 
       - name: Create dbt profiles.yml
-  env:
-    DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-  run: |
-    echo "sports_transform:" > sports_transform/profiles.yml
-    echo "  target: dev" >> sports_transform/profiles.yml
-    echo "  outputs:" >> sports_transform/profiles.yml
-    echo "    dev:" >> sports_transform/profiles.yml
-    echo "      type: postgres" >> sports_transform/profiles.yml
-    echo "      host: aws-1-eu-central-1.pooler.supabase.com" >> sports_transform/profiles.yml
-    echo "      user: postgres.agvurhyxkmhwjhohsbzb" >> sports_transform/profiles.yml
-    echo "      password: \"$DB_PASSWORD\"" >> sports_transform/profiles.yml
-    echo "      port: 5432" >> sports_transform/profiles.yml
-    echo "      dbname: postgres" >> sports_transform/profiles.yml
-    echo "      schema: public" >> sports_transform/profiles.yml
-    echo "      threads: 1" >> sports_transform/profiles.yml
-    echo "      search_path: public" >> sports_transform/profiles.yml
-    echo "      sslmode: require" >> sports_transform/profiles.yml
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          python - <<'PYEOF'
+          import os
+          password = os.environ['DB_PASSWORD']
+          content = f"""sports_transform:
+            target: dev
+            outputs:
+              dev:
+                type: postgres
+                host: aws-1-eu-central-1.pooler.supabase.com
+                user: postgres.agvurhyxkmhwjhohsbzb
+                password: "{password}"
+                port: 5432
+                dbname: postgres
+                schema: public
+                threads: 1
+                search_path: public
+                sslmode: require
+          """
+          with open('sports_transform/profiles.yml', 'w') as f:
+              f.write(content)
+          print("profiles.yml created successfully")
+          PYEOF
 
       - name: Run dbt Transformations
         env:
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }} 
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           cd sports_transform
