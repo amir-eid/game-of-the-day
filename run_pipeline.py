@@ -616,9 +616,7 @@ def update_history_and_display_task():
 
     if webhook_url:
         discord_msg = (
-            "🚀 **The new game plan is live!**\n\n"
-            f"There are waiting **{len(df)} games** for you.\n"
-            "Check the details on the dashboard:\n"
+            "Check the details on your games dashboard:\n"
             f"👉 {dashboard_url}"
         )
         try:
