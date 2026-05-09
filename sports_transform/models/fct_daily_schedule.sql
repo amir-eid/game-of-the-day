@@ -85,10 +85,16 @@ base as (
 -- 4. add IDs via Join
 joined_ids as (
     select
-        b.*,
+        b."League",
+        b."Away Team",
+        b."Home Team",
+        b."Away Record",
+        b."Home Record",
+        b."Date",
+        b."Time (CET)",
+        b."End Time (CET)",
+        b."Is Playoff",
         l.league_id as league_id_new,
-        t_home.team_id as home_team_id_new,
-        t_away.team_id as away_team_id_new,
         CASE 
             WHEN b."League" = 'F1' THEN 999
             ELSE t_home.team_id 
