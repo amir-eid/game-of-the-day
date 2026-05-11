@@ -370,12 +370,20 @@ def fetch_sumo_task():
 
         print(f"⭐ Fetching Bouts for Basho {basho_id}, Day {day_diff}...")
         response = requests.get(f"https://www.sumo-api.com/api/basho/{basho_id}/bouts/{day_diff}")
+
+        print(f"Sumo API status: {response.status_code}")
+        print(f"Sumo API response: {response.text[:500]}")
         
         if response.status_code != 200:
             return pd.DataFrame()
 
         data = response.json()
+        print(f"Total bouts returned: {len(data.get('bouts', []))}")
+
         bouts = []
+
+        divisions = [b.get('division') for b in data.get('bouts', [])]
+        print(f"Divisions found: {divisions}")
         
         for bout in data.get('bouts', []):
             if bout.get('division') == 'Makuuchi':
