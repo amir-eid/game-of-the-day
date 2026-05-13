@@ -40,11 +40,6 @@ raw_f1_source as (
 ),
 
 -- add other sources with similar structure, ensuring to cast date and time fields appropriately and to set "Is Playoff" to false if not available
-raw_sumo_source as (
-    select "League", "Away Team", "Home Team", "Away Record", "Home Record", 
-           "Date"::date, "Time (CET)"::time, "End Time (CET)"::time, "Is Playoff"::boolean 
-    from {{ source('public', 'raw_sumo') }}
-),
 
 raw_npb_source as (
     select "League", "Away Team", "Home Team", "Away Record", "Home Record", 
@@ -76,7 +71,6 @@ base as (
     select * from raw_games_source
     union all select * from raw_ufc_source
     union all select * from raw_f1_source
-    union all select * from raw_sumo_source
     union all select * from raw_npb_source
     union all select * from raw_eurobasket_source
     union all select * from raw_boxing_source

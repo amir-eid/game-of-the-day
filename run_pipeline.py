@@ -170,10 +170,6 @@ def save_boxing_to_supabase(df):
 def save_npb_to_supabase(df):
     generic_save_to_supabase(df, "raw_npb")
 
-@task(name="Save Sumo to Supabase")
-def save_sumo_to_supabase(df):
-    generic_save_to_supabase(df, "raw_sumo")
-
 @task
 def save_f1_to_supabase(df):
     generic_save_to_supabase(df, "raw_f1")
@@ -186,7 +182,7 @@ def save_ufc_to_supabase(df):
 def save_to_supabase_task(df):
     generic_save_to_supabase(df, "raw_games")
 
-#fetch other leagues which can not be easily scraped via ESPN API (e.g. NPB, Sumo, Boxing, Basketball) using SerpApi or other APIs
+#fetch other leagues which can not be easily scraped via ESPN API (e.g. NPB, Boxing, Basketball) using SerpApi or other APIs
 @task(retries=3)
 def fetch_basketball_task():
     """Get EuroLeague and ABA data via SerpApi."""
@@ -334,78 +330,6 @@ def fetch_npb_task():
     except Exception as e:
         print(f"❌ SerpApi Error: {e}")
         return pd.DataFrame()
-
-@task(retries=2, retry_delay_seconds=60)
-def fetch_sumo_task():
-    """
-    Fetches sumo bouts of the top division (Makuuchi) from Sumo-API.com.
-    Automatically calculates the current basho based on month and year.
-    """
-    print("🎎 Assessing Sumo schedule...")
-    now = datetime.now()
-    year = now.year
-    month = now.month
-
-    # Sumo bashos are only held in odd months: Jan, Mar, May, Jul, Sep, Nov
-    if month % 2 == 0:
-        print(f"🏮 {now.strftime('%B')} is not a sumo month (Tournaments: Jan, Mar, May, Jul, Sep, Nov)")
-        return pd.DataFrame()
-
-    # Construct Basho ID (e.g. 202603 for march 2026)
-    basho_id = f"{year}{month:02d}"
-    
-    try:
-        basho_info_res = requests.get(f"https://www.sumo-api.com/api/basho/{basho_id}")
-        if basho_info_res.status_code != 200:
-            return pd.DataFrame()
-            
-        start_date_str = basho_info_res.json().get('startDate') 
-        start_date = datetime.strptime(start_date_str.split('T')[0], '%Y-%m-%d')        
-        
-        day_diff = (now - start_date).days + 1
-        
-        if not (1 <= day_diff <= 15):
-            print(f"⏳ Basho {basho_id} planned, but today is not a tournament day (1-15) (Day: {day_diff}).")
-            return pd.DataFrame()
-
-        print(f"⭐ Fetching Bouts for Basho {basho_id}, Day {day_diff}...")
-        response = requests.get(f"https://www.sumo-api.com/api/basho/{basho_id}/bouts/{day_diff}")
-
-        print(f"Sumo API status: {response.status_code}")
-        print(f"Sumo API response: {response.text[:500]}")
-        
-        if response.status_code != 200:
-            return pd.DataFrame()
-
-        data = response.json()
-        print(f"Total bouts returned: {len(data.get('bouts', []))}")
-
-        bouts = []
-
-        divisions = [b.get('division') for b in data.get('bouts', [])]
-        print(f"Divisions found: {divisions}")
-        
-        for bout in data.get('bouts', []):
-            if bout.get('division') == 'Makuuchi':
-                bouts.append({
-                    'League': 'Sumo',
-                    'Away Team': bout.get('eastRikishiName'),
-                    'Home Team': bout.get('westRikishiName'),
-                    'Away Record': '0-0',
-                    'Home Record': '0-0',
-                    'Date': now.strftime('%Y-%m-%d'),
-                    'Time (CET)': '08:30', # Standard time for Makuuchi Bouts
-                    'End Time (CET)': '11:00',
-                    'Is Playoff': False
-                })
-        
-        df = pd.DataFrame(bouts)
-        print(f"✅ {len(df)} Sumo bouts loaded.")
-        return df
-
-    except Exception as e:
-        print(f"❌ Sumo-API Error: {e}")
-        return pd.DataFrame()
     
 @task(retries=3, retry_delay_seconds=60)
 def fetch_f1_task():
@@ -534,11 +458,9 @@ def auto_seed_teams_task():
             SELECT "Home Team" AS name, "League" AS league FROM public.raw_eurobasket UNION
             SELECT "Away Team", "League" FROM public.raw_eurobasket UNION
             
-            -- Boxing & Sumo
+            -- Boxing
             SELECT "Home Team", 'Boxing' FROM public.raw_boxing UNION
             SELECT "Away Team", 'Boxing' FROM public.raw_boxing UNION
-            SELECT "Home Team", 'Sumo' FROM public.raw_sumo UNION
-            SELECT "Away Team", 'Sumo' FROM public.raw_sumo UNION
             
             -- UFC 
             SELECT "Fighter_A", 'UFC' FROM public.raw_ufc UNION
@@ -641,7 +563,6 @@ def sports_flow():
     raw_df = scrape_task()
     ufc_df = fetch_ufc_task() 
     f1_df = fetch_f1_task()
-    sumo_df = fetch_sumo_task()
     npb_df = fetch_npb_task()
     eurobasket_df = fetch_basketball_task()
     boxing_df = fetch_boxing_task()
@@ -649,7 +570,6 @@ def sports_flow():
     save_raw = save_to_supabase_task(raw_df)
     save_ufc = save_ufc_to_supabase(ufc_df)
     save_f1 = save_f1_to_supabase(f1_df)
-    save_sumo = save_sumo_to_supabase(sumo_df)
     save_npb = save_npb_to_supabase(npb_df)
     save_basketball = save_basketball_to_supabase(eurobasket_df)
     save_boxing = save_boxing_to_supabase(boxing_df)
@@ -657,7 +577,7 @@ def sports_flow():
 
     seed = auto_seed_teams_task(wait_for=[
         save_raw, save_ufc, save_f1, 
-        save_sumo, save_npb, save_basketball, save_boxing
+        save_npb, save_basketball, save_boxing
     ])  
     #transformation & display
     dbt = dbt_transform_task(wait_for=[seed])
