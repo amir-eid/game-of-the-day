@@ -215,6 +215,6 @@ where
             and "Time (CET)" < '05:00'
         )
     )
-    -- no games between 2:00 and 10:00 am
-    and ("Time (CET)" < '02:00' or "Time (CET)" > '10:00')
+    -- no games between 2:00 and 5:00 am
+    and ("Time (CET)" < '02:00' or "Time (CET)" > '05:00')
 order by total_watch_score desc
