@@ -9,6 +9,7 @@ import schedule, time
 from sqlalchemy import create_engine, text
 import pytz
 import sys
+import time
 
 # ── Leagues to fetch 
 LEAGUES = [
@@ -441,7 +442,9 @@ def dbt_transform_task():
 
 @task(name="Auto-Seed All Athletes & Teams")
 def auto_seed_teams_task():
-    print("🌱 Running Full Auto-Seed for Teams and Athletes (with League Context)...")
+    print("Waiting 10s for database transactions to commit...")
+    time.sleep(10)
+    print("Running Full Auto-Seed for Teams and Athletes (with League Context)...")
     seed_sql = text("""
         INSERT INTO public.dim_teams (team_name, league_name)
         SELECT DISTINCT name, league
