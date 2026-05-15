@@ -442,8 +442,6 @@ def dbt_transform_task():
 
 @task(name="Auto-Seed All Athletes & Teams")
 def auto_seed_teams_task():
-    print("Waiting 10s for database transactions to commit...")
-    time.sleep(10)
     print("Running Full Auto-Seed for Teams and Athletes (with League Context)...")
     seed_sql = text("""
         INSERT INTO public.dim_teams (team_name, league_name)
@@ -582,6 +580,9 @@ def sports_flow():
         save_raw, save_ufc, save_f1, 
         save_npb, save_basketball, save_boxing
     ])  
+
+    print("Pausing 20 seconds to let all raw data and teams settle in Supabase...")
+    time.sleep(20)
     #transformation & display
     dbt = dbt_transform_task(wait_for=[seed])
     update_history_and_display_task(wait_for=[dbt])
