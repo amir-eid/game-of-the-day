@@ -27,6 +27,15 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
           python -c "import os; p = os.environ['DB_PASSWORD']; print(f'Password length: {len(p)}')"
+          
+      - name: Run Pipeline
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DBT_PROFILES_DIR: "sports_transform"
+        run: python run_pipeline.py --oneshot
 
       - name: Create dbt profiles.yml
         env:
@@ -44,12 +53,3 @@ jobs:
         run: |
           cd sports_transform
           dbt run --target dev --profiles-dir .
-
-      - name: Run Pipeline
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          DBT_PROFILES_DIR: "sports_transform"
-        run: python run_pipeline.py --oneshot
