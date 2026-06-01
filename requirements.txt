@@ -1,6 +1,6 @@
 requests
 pandas
-dbt-postgres
+dbt-postgres==1.8.4
 streamlit
 prefect
 feedparser
