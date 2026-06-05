@@ -477,7 +477,6 @@ def auto_seed_teams_task():
     """)
     with engine.begin() as conn:
         conn.execute(seed_sql)
-    
 
 @task
 def update_history_and_display_task():
@@ -487,11 +486,10 @@ def update_history_and_display_task():
     print("\n🏆 UPDATING HISTORY & NOTIFYING DISCORD 🏆")
     
     with engine.begin() as conn:
-        # This query ensures we only keep the highest scoring matchup per date and team combination,
-        #  preventing duplicates and ensuring the most relevant game is highlighted.
         conn.execute(text("""
             WITH unique_source AS (
-                SELECT DISTINCT ON ("Date"::date, home_team_id_new, away_team_id_new)
+                -- Added time to DISTINCT ON
+                SELECT DISTINCT ON ("Date"::date, "Time (CET)"::time, home_team_id_new, away_team_id_new)
                     "Date"::date as clean_date,
                     "League" as clean_league,
                     "Away Team" || ' @ ' || "Home Team" as clean_matchup,
@@ -503,7 +501,8 @@ def update_history_and_display_task():
                 FROM public.fct_daily_schedule
                 WHERE home_team_id_new IS NOT NULL 
                   AND away_team_id_new IS NOT NULL
-                ORDER BY "Date"::date, home_team_id_new, away_team_id_new, total_watch_score DESC
+                -- Added time to ORDER BY
+                ORDER BY "Date"::date, "Time (CET)"::time, home_team_id_new, away_team_id_new, total_watch_score DESC
             )
             INSERT INTO public.watch_history (
                 date, league, matchup, league_id_new, 
@@ -515,10 +514,10 @@ def update_history_and_display_task():
                 home_team_id_new, away_team_id_new, 
                 total_watch_score, clean_time, FALSE
             FROM unique_source
-            ON CONFLICT (date, home_team_id_new, away_team_id_new)
+            -- Added time to ON CONFLICT
+            ON CONFLICT (date, time, home_team_id_new, away_team_id_new)
             DO UPDATE SET
                 score = EXCLUDED.score,
-                time = EXCLUDED.time,
                 league = EXCLUDED.league,
                 matchup = EXCLUDED.matchup,
                 league_id_new = EXCLUDED.league_id_new;
@@ -557,7 +556,7 @@ def update_history_and_display_task():
             print(f"❌ Failed to send Discord notification: {e}")
 
     return df
-
+    
 @flow(name="Sports Data Pipeline", log_prints=True)
 def sports_flow():
     #scraping
