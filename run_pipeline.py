@@ -334,39 +334,59 @@ def fetch_npb_task():
     
 @task(retries=3, retry_delay_seconds=60)
 def fetch_f1_task():
-    """Scrape today's F1 events from the ESPN-API."""
-    print("Scraping F1 events...")
+    """Fetch today's F1 sessions (FP1-3, Qualy, Sprint, Race) from f1api.dev."""
+    print("Fetching F1 schedule from f1api.dev...")
 
     vienna_tz = pytz.timezone('Europe/Vienna')
     now = datetime.now(vienna_tz)
     today_str = now.strftime('%Y-%m-%d')
-    api_date = now.strftime('%Y%m%d')
-    url = f"https://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard?dates={api_date}"
-    
+    url = "https://f1api.dev/api/current"
+ 
+    # session key in the API response -> human-readable label
+    session_types = [
+        ('fp1', 'Free Practice 1'),
+        ('fp2', 'Free Practice 2'),
+        ('fp3', 'Free Practice 3'),
+        ('sprintQualy', 'Sprint Qualifying'),
+        ('sprintRace', 'Sprint Race'),
+        ('qualy', 'Qualifying'),
+        ('race', 'Race'),
+    ]
+ 
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=15)
         response.raise_for_status()
         data = response.json()
-        f1_events = []
-        
-        for event in data.get('events', []):
-            dt_cet = pd.to_datetime(event.get('date')).tz_convert('Europe/Vienna')
-            event_date = dt_cet.strftime('%Y-%m-%d')
 
-            if event_date != today_str:
-                continue
-            
-            f1_events.append({
-                'Event_Name': event.get('name'),
-                'Circuit': event.get('venue', {}).get('fullName', 'Unknown Circuit'),
-                'Date': dt_cet.strftime('%Y-%m-%d'),
-                'Time_CET': dt_cet.strftime('%H:%M'),
-                'League': 'F1'
-            })
-        
+        f1_events = []
+        for race in data.get('races', []):
+            schedule = race.get('schedule', {}) or {}
+            race_name = race.get('raceName', 'Unknown Grand Prix')
+            circuit = (race.get('circuit') or {}).get('circuitName', 'Unknown Circuit')
+ 
+            for key, label in session_types:
+                session = schedule.get(key)
+                if not session or session.get('date') != today_str:
+                    continue
+ 
+                time_str = session.get('time')
+                if time_str:
+                    # API times are UTC (e.g. "13:30:00Z") -> convert to CET/CEST
+                    dt_utc = pd.to_datetime(f"{session['date']}T{time_str}", utc=True)
+                    time_cet = dt_utc.tz_convert(vienna_tz).strftime('%H:%M')
+                else:
+                    time_cet = '00:00'
+ 
+                f1_events.append({
+                    'Event_Name': f"{race_name} – {label}",
+                    'Circuit': circuit,
+                    'Date': today_str,
+                    'Time_CET': time_cet,
+                    'League': 'F1'
+                })
         return pd.DataFrame(f1_events)
     except Exception as e:
-        print(f"Error Scraping F1: {e}")
+        print(f"Error fetching F1 schedule from f1api.dev: {e}")
         return pd.DataFrame()
 
 @task(retries=3, retry_delay_seconds=60)
