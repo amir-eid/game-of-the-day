@@ -442,22 +442,21 @@ def scrape_task():
     print("🛰️  Scraping ESPN for today's games...")
     return fetch_all_leagues()
 
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+DBT_PROJECT_DIR = os.path.join(PROJECT_ROOT, "sports_transform")
+
 @task
 def dbt_transform_task():
     print("🚀 Triggering dbt transformation...")
-
-    try:
-        result = subprocess.run(
-            ['dbt', 'run', '--project-dir', '/app/sports_transform', '--profiles-dir', '/app/sports_transform'],
-            capture_output=True,
-            text=True
-        )
-        print(result.stdout) 
-    except subprocess.CalledProcessError as e:
-        print(f"dbt failed with return code {e.returncode}")
-        print(f"STDOUT: {e.stdout}")
-        print(f"STDERR: {e.stderr}")
-        raise e
+    result = subprocess.run(
+        ['dbt', 'run', '--project-dir', DBT_PROJECT_DIR, '--profiles-dir', DBT_PROJECT_DIR],
+        capture_output=True,
+        text=True
+    )
+    print(result.stdout)
+    if result.returncode != 0:
+        print(result.stderr)
+        raise RuntimeError(f"dbt run failed with code {result.returncode}")
 
 
 @task(name="Auto-Seed All Athletes & Teams")
