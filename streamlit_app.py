@@ -107,7 +107,16 @@ try:
 
         df_filtered = df[df['League'].isin(liga_filter)]
 
+        has_time_cols = 'Time (CET)' in df.columns and 'End Time (CET)' in df.columns
+        if use_time_filter and not has_time_cols:
+            st.sidebar.error(
+                "Can't filter by time: expected columns 'Time (CET)' / 'End Time (CET)' "
+                "aren't in the data. Actual columns: " + ", ".join(df.columns)
+            )
+            use_time_filter = False
+
         if use_time_filter and not df_filtered.empty:
+
             starts = parse_time_col(df_filtered['Time (CET)'])
             ends = parse_time_col(df_filtered['End Time (CET)'])
 
@@ -139,9 +148,14 @@ try:
             max_score = int(df_filtered['total_watch_score'].max()) if not df_filtered.empty else 0
             m2.metric("Highest Score", f"{max_score}")
 
-            df_display = flag_conflicts(df_filtered) if not df_filtered.empty else df_filtered
-            conflict_count = int((df_display['Conflicts With'] != "").sum()) if not df_display.empty else 0
+            if not df_filtered.empty and has_time_cols:
+                df_display = flag_conflicts(df_filtered)
+                conflict_count = int((df_display['Conflicts With'] != "").sum())
+            else:
+                df_display = df_filtered
+                conflict_count = 0
             m3.metric("Time Conflicts", conflict_count)
+
 
             def highlight_scores(val):
                 return 'background-color: #2ecc71; color: black; font-weight: bold' if val >= 50 else ''
