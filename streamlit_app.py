@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 import os
 from datetime import datetime, time as dtime
 
-# congiguration
+# configuration
 st.set_page_config(page_title="Sports Watcher Dashboard", layout="wide")
 st.title("🏆 Sports Watcher Dashboard")
 
