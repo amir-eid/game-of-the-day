@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 import os
 from datetime import datetime, time as dtime
 
-# configuration
+# congiguration
 st.set_page_config(page_title="Sports Watcher Dashboard", layout="wide")
 st.title("🏆 Sports Watcher Dashboard")
 
@@ -28,9 +28,47 @@ def load_data():
         return pd.DataFrame()
 
 
+# The dashboard view (v_dashboard_top_picks) only exposes a start "Time" column,
+# no end time. We estimate end time using the same average durations (hours) the
+# scraper already uses in run_pipeline.py, so this stays consistent with the pipeline.
+LEAGUE_DURATION_HOURS = {
+    'NBA': 2.5, 'NFL': 3.25, 'MLB': 2.5, 'World Baseball Classic': 3, 'NHL': 2.5,
+    'College Basketball': 2.5, 'College Football': 3.5, 'FIBA World Cup': 2.5, 'Olympic Ice Hockey': 2.5,
+    'ESP.1': 2.0, 'ENG.1': 2.0, 'GER.1': 2.0, 'FRA.1': 2.0, 'ITA.1': 2.0, 'Olympic Basketball': 2.5,
+    'UEFA Champions League': 2.0, 'UEFA Europa League': 2.0, 'UEFA Conference League': 2.0,
+    'FIFA World Cup': 2.0, 'UEFA European Championship': 2.0, 'UEFA European Championship Qualifiers': 2.0,
+    'FA Cup': 2.0, 'Copa del Rey': 2.0, 'Eredivisie': 2.0, 'Portuguese Primeira Liga': 2.0,
+    'Russian Premier League': 2.0, 'Austrian Bundesliga': 2.0, 'Turkish Süper Lig': 2.0,
+    'Africa Cup of Nations': 2.0, 'Africa Cup of Nations Qualifiers': 2.0, 'Copa America': 2.0,
+    'UEFA Nations League': 2.0, 'Olympic Football Tournament': 2.0, 'FIFA World Cup Qualifiers - UEFA': 2.0,
+    'FIFA World Cup Qualifiers - CAF': 2.0, 'J1 League': 2.0, 'Copa Libertadores': 2.0, 'International Friendlies': 2.0,
+    'Sumo': 2.5, 'Boxing': 3, 'EuroLeague': 2.5, 'ABA': 2.5, 'F1': 3, 'UFC': 3,
+}
+DEFAULT_DURATION_HOURS = 2.5
+
+
 def parse_time_col(series):
-    """Parse a HH:MM string column into datetime.time, tolerating bad values."""
-    return pd.to_datetime(series, format='%H:%M', errors='coerce').dt.time
+    """Parse a HH:MM (or HH:MM:SS) string column into datetime.time, tolerating bad values."""
+    parsed = pd.to_datetime(series, format='%H:%M:%S', errors='coerce')
+    missing = parsed.isna()
+    if missing.any():
+        parsed_alt = pd.to_datetime(series[missing], format='%H:%M', errors='coerce')
+        parsed.loc[missing] = parsed_alt
+    return parsed.dt.time
+
+
+def estimate_end_times(start_times, leagues):
+    """Estimate end time.time from start time + per-league average duration."""
+    ends = []
+    for t, league in zip(start_times, leagues):
+        if pd.isna(t):
+            ends.append(pd.NaT)
+            continue
+        hours = LEAGUE_DURATION_HOURS.get(league, DEFAULT_DURATION_HOURS)
+        total_minutes = t.hour * 60 + t.minute + int(hours * 60)
+        total_minutes %= 24 * 60
+        ends.append(dtime(total_minutes // 60, total_minutes % 60))
+    return ends
 
 
 def time_ranges_overlap(start_a, end_a, start_b, end_b):
@@ -50,25 +88,23 @@ def time_ranges_overlap(start_a, end_a, start_b, end_b):
     return a_start < b_end and b_start < a_end
 
 
-def flag_conflicts(df):
-    """Add a 'Conflicts With' column listing other matchups that overlap in time."""
-    starts = parse_time_col(df['Time (CET)'])
-    ends = parse_time_col(df['End Time (CET)'])
+def flag_conflicts(df, start_col):
+    """Add a 'Conflicts With' column listing other matchups that overlap in (estimated) time."""
+    starts = parse_time_col(df[start_col])
+    ends = estimate_end_times(starts, df['League'])
     conflicts = [[] for _ in range(len(df))]
 
-    idx = df.index.to_list()
-    for i in range(len(idx)):
-        if pd.isna(starts.iloc[i]) or pd.isna(ends.iloc[i]):
+    for i in range(len(df)):
+        if pd.isna(starts.iloc[i]):
             continue
-        for j in range(len(idx)):
-            if i == j:
+        for j in range(len(df)):
+            if i == j or pd.isna(starts.iloc[j]):
                 continue
-            if pd.isna(starts.iloc[j]) or pd.isna(ends.iloc[j]):
-                continue
-            if time_ranges_overlap(starts.iloc[i], ends.iloc[i], starts.iloc[j], ends.iloc[j]):
+            if time_ranges_overlap(starts.iloc[i], ends[i], starts.iloc[j], ends[j]):
                 away = df.iloc[j].get('Away Team', '')
                 home = df.iloc[j].get('Home Team', '')
-                conflicts[i].append(f"{away} vs {home}")
+                label = f"{away} vs {home}" if away or home else str(df.iloc[j].get('matchup', ''))
+                conflicts[i].append(label)
 
     df = df.copy()
     df['Conflicts With'] = ["; ".join(c) if c else "" for c in conflicts]
@@ -107,22 +143,25 @@ try:
 
         df_filtered = df[df['League'].isin(liga_filter)]
 
-        has_time_cols = 'Time (CET)' in df.columns and 'End Time (CET)' in df.columns
-        if use_time_filter and not has_time_cols:
+        has_time_col = 'Time' in df.columns
+        if use_time_filter and not has_time_col:
             st.sidebar.error(
-                "Can't filter by time: expected columns 'Time (CET)' / 'End Time (CET)' "
-                "aren't in the data. Actual columns: " + ", ".join(df.columns)
+                "Can't filter by time: no 'Time' column in the data. "
+                "Actual columns: " + ", ".join(df.columns)
             )
             use_time_filter = False
 
+        if has_time_col:
+            st.sidebar.caption("End times aren't in the data yet, so they're estimated from average game length per league.")
+
         if use_time_filter and not df_filtered.empty:
 
-            starts = parse_time_col(df_filtered['Time (CET)'])
-            ends = parse_time_col(df_filtered['End Time (CET)'])
+            starts = parse_time_col(df_filtered['Time'])
+            ends = estimate_end_times(starts, df_filtered['League'])
 
             keep = []
             for g_start, g_end in zip(starts, ends):
-                if pd.isna(g_start) or pd.isna(g_end):
+                if pd.isna(g_start):
                     keep.append(False)
                     continue
                 if fit_mode == "Fit entirely inside my window":
@@ -148,8 +187,8 @@ try:
             max_score = int(df_filtered['total_watch_score'].max()) if not df_filtered.empty else 0
             m2.metric("Highest Score", f"{max_score}")
 
-            if not df_filtered.empty and has_time_cols:
-                df_display = flag_conflicts(df_filtered)
+            if not df_filtered.empty and has_time_col:
+                df_display = flag_conflicts(df_filtered, start_col='Time')
                 conflict_count = int((df_display['Conflicts With'] != "").sum())
             else:
                 df_display = df_filtered
