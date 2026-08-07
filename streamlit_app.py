@@ -10,7 +10,7 @@ st.set_page_config(page_title="Sports Watcher Dashboard", layout="wide")
 st.title("🏆 Sports Watcher Dashboard")
 
 # load data from supabase
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)
 def load_data():
     if "SUPABASE_DB_URL" not in st.secrets:
         st.error("Add SUPABASE_DB_URL in Streamlit Secrets!")
@@ -57,50 +57,49 @@ def parse_time_col(series):
     return parsed.dt.time
 
 
-def estimate_end_times(start_times, leagues):
-    """Estimate end time.time from start time + per-league average duration."""
+def game_broadcast_minutes(times, dates, today_date):
+    """Continuous minutes anchored to 'today_date'. Games actually dated the next
+    calendar day (per the real Date column, not a guessed hour cutoff) get +24h,
+    so a 01:10 game on tomorrow's date correctly lines up after a 23:50 game today."""
+    out = []
+    for t, d in zip(times, dates):
+        if pd.isna(t) or pd.isna(d):
+            out.append(None)
+            continue
+        m = t.hour * 60 + t.minute
+        if d > today_date:
+            m += 24 * 60
+        out.append(m)
+    return out
+
+
+def estimate_end_minutes(start_minutes, leagues):
+    """Estimate end time as continuous minutes from start + per-league average duration."""
     ends = []
-    for t, league in zip(start_times, leagues):
-        if pd.isna(t):
-            ends.append(pd.NaT)
+    for m, league in zip(start_minutes, leagues):
+        if m is None:
+            ends.append(None)
             continue
         hours = LEAGUE_DURATION_HOURS.get(league, DEFAULT_DURATION_HOURS)
-        total_minutes = t.hour * 60 + t.minute + int(hours * 60)
-        total_minutes %= 24 * 60
-        ends.append(dtime(total_minutes // 60, total_minutes % 60))
+        ends.append(m + int(round(hours * 60)))
     return ends
 
 
-def time_ranges_overlap(start_a, end_a, start_b, end_b):
-    """True if [start_a, end_a) overlaps [start_b, end_b), handling past-midnight end times."""
-    def to_minutes(t):
-        return t.hour * 60 + t.minute
-
-    a_start, a_end = to_minutes(start_a), to_minutes(end_a)
-    b_start, b_end = to_minutes(start_b), to_minutes(end_b)
-
-    # handle games that roll past midnight (end < start)
-    if a_end <= a_start:
-        a_end += 24 * 60
-    if b_end <= b_start:
-        b_end += 24 * 60
-
-    return a_start < b_end and b_start < a_end
-
-
-def flag_conflicts(df, start_col):
+def flag_conflicts(df, start_col, today_date):
     """Add a 'Conflicts With' column listing other matchups that overlap in (estimated) time."""
-    starts = parse_time_col(df[start_col])
-    ends = estimate_end_times(starts, df['League'])
+    starts_t = parse_time_col(df[start_col])
+    dates = pd.to_datetime(df['Date']).dt.date
+    start_min = game_broadcast_minutes(starts_t, dates, today_date)
+    end_min = estimate_end_minutes(start_min, df['League'])
     conflicts = [[] for _ in range(len(df))]
 
     for i in range(len(df)):
-        if pd.isna(starts.iloc[i]):
+        if start_min[i] is None:
             continue
         for j in range(len(df)):
-            if i == j or pd.isna(starts.iloc[j]):
+            if i == j or start_min[j] is None:
                 continue
-            if time_ranges_overlap(starts.iloc[i], ends[i], starts.iloc[j], ends[j]):
+            if start_min[i] < end_min[j] and start_min[j] < end_min[i]:
                 away = df.iloc[j].get('Away Team', '')
                 home = df.iloc[j].get('Home Team', '')
                 label = f"{away} vs {home}" if away or home else str(df.iloc[j].get('matchup', ''))
@@ -112,7 +111,11 @@ def flag_conflicts(df, start_col):
 
 
 try:
+    if st.sidebar.button("🔄 Refresh Data Now"):
+        load_data.clear()
+
     df = load_data()
+    st.sidebar.caption(f"Data cache refreshes automatically every 5 min. Last loaded: {datetime.now().strftime('%H:%M:%S')}")
 
     if df.empty:
         st.warning("No data found in database. Is GitHub Action running?")
@@ -156,26 +159,30 @@ try:
 
         if use_time_filter and not df_filtered.empty:
 
-            starts = parse_time_col(df_filtered['Time'])
-            ends = estimate_end_times(starts, df_filtered['League'])
+            df_filtered = df_filtered.copy()
+            df_filtered['Date'] = pd.to_datetime(df_filtered['Date']).dt.date
+            today_date = df_filtered['Date'].min()
+
+            starts_t = parse_time_col(df_filtered['Time'])
+            game_start_min = game_broadcast_minutes(starts_t, df_filtered['Date'], today_date)
+            game_end_min = estimate_end_minutes(game_start_min, df_filtered['League'])
+
+            # Window is just clock time (no date attached). Only treat it as crossing
+            # midnight if Until is at/before From — no hidden shifting based on the hour itself.
+            win_start_min = window_start.hour * 60 + window_start.minute
+            win_end_min = window_end.hour * 60 + window_end.minute
+            if win_end_min <= win_start_min:
+                win_end_min += 24 * 60
 
             keep = []
-            for g_start, g_end in zip(starts, ends):
-                if pd.isna(g_start):
+            for gs, ge in zip(game_start_min, game_end_min):
+                if gs is None:
                     keep.append(False)
                     continue
                 if fit_mode == "Fit entirely inside my window":
-                    def to_min(t):
-                        return t.hour * 60 + t.minute
-                    ws, we = to_min(window_start), to_min(window_end)
-                    gs, ge = to_min(g_start), to_min(g_end)
-                    if we <= ws:
-                        we += 24 * 60
-                    if ge <= gs:
-                        ge += 24 * 60
-                    keep.append(gs >= ws and ge <= we)
+                    keep.append(gs >= win_start_min and ge <= win_end_min)
                 else:
-                    keep.append(time_ranges_overlap(g_start, g_end, window_start, window_end))
+                    keep.append(gs < win_end_min and win_start_min < ge)
             df_filtered = df_filtered[pd.Series(keep, index=df_filtered.index)]
 
         # 2. Dashboard Tabs
@@ -188,7 +195,10 @@ try:
             m2.metric("Highest Score", f"{max_score}")
 
             if not df_filtered.empty and has_time_col:
-                df_display = flag_conflicts(df_filtered, start_col='Time')
+                cdf = df_filtered.copy()
+                cdf['Date'] = pd.to_datetime(cdf['Date']).dt.date
+                conflict_today = cdf['Date'].min()
+                df_display = flag_conflicts(cdf, start_col='Time', today_date=conflict_today)
                 conflict_count = int((df_display['Conflicts With'] != "").sum())
             else:
                 df_display = df_filtered
@@ -259,4 +269,3 @@ try:
 
 except Exception as e:
     st.error(f"Critical Error: {e}")
-
