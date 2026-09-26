@@ -148,6 +148,7 @@ def fetch_league(sport, league_slug, league_name, date=None):
 # load environment variables from .env file
 load_dotenv()
 DB_URL = os.getenv("SUPABASE_DB_URL")
+print(f"DEBUG: DB_URL scheme = {DB_URL.split('://')[0] if DB_URL else 'NONE'}")
 engine = create_engine(DB_URL)
 
 def generic_save_to_supabase(df, table_name):
